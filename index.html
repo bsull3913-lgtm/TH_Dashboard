@@ -3518,31 +3518,54 @@ function renderAnalysis() {
     options:{ ...chartOpts(0,5), plugins:{ legend:{ display:false } } }
   });
 
-  // ── 수면 × 컨디션 상세
+  // ── 수면 × 컨디션 상세 (D-1, D-2 기준)
   const sleepBands = [
-    { label:'우수 85+', min:85, max:100, col:'#5ed8a4' },
+    { label:'우수 85+',  min:85, max:100, col:'#5ed8a4' },
     { label:'좋음 75~84', min:75, max:84, col:'#7c6af7' },
     { label:'보통 65~74', min:65, max:74, col:'#f7c26a' },
-    { label:'낮음 <65',  min:0,  max:64, col:'#f76a6a' },
+    { label:'낮음 <65',  min:0,  max:64,  col:'#f76a6a' },
   ];
-  let sh = '<div style="margin-bottom:14px">';
-  sleepBands.forEach(b => {
-    const days = sleeps.filter(s=>s.score>=b.min&&s.score<=b.max);
-    const mc = days.map(s=>conds.find(c=>c.date===s.date)).filter(Boolean);
-    const av = mc.length ? mean2(mc.map(c=>c.score)).toFixed(2) : null;
-    sh += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px">
-      <div style="width:76px;color:var(--text-muted)">${b.label}</div>
-      <div style="flex:1;background:var(--surface2);border-radius:3px;height:14px;overflow:hidden">
-        ${av?`<div style="width:${(parseFloat(av)/5*100).toFixed(0)}%;height:100%;background:${b.col};border-radius:3px;transition:width 0.5s"></div>`:''}
-      </div>
-      <div style="width:90px;text-align:right">
-        ${av?`<b style="color:${b.col}">${av}</b> <span style="color:var(--text-muted)">(${mc.length}일)</span>`:'<span style="color:var(--text-muted)">-</span>'}
-      </div>
-    </div>`;
-  });
-  sh += '</div>';
 
-  // 전날 수면 → 오늘 컨디션 (D-1 수면)
+  // 공통 렌더: 특정 lag(일)의 수면 → 오늘 컨디션 구간별 바
+  function renderSleepBands(lag) {
+    let html = '<div style="margin-bottom:6px">';
+    sleepBands.forEach(b => {
+      // lag일 전 수면이 구간 b에 해당하는 날의 오늘 컨디션
+      const mc = conds.map(c => {
+        const s = sleepMap[shiftDate(c.date, -lag)];
+        return (s && s.score >= b.min && s.score <= b.max) ? c.score : null;
+      }).filter(v => v !== null);
+      const av = mc.length ? mean2(mc).toFixed(2) : null;
+      html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px">
+        <div style="width:80px;color:var(--text-muted);white-space:nowrap">${b.label}</div>
+        <div style="flex:1;background:var(--surface2);border-radius:3px;height:14px;overflow:hidden">
+          ${av ? `<div style="width:${(parseFloat(av)/5*100).toFixed(0)}%;height:100%;background:${b.col};border-radius:3px;transition:width 0.5s"></div>` : ''}
+        </div>
+        <div style="width:90px;text-align:right">
+          ${av ? `<b style="color:${b.col}">${av}</b> <span style="color:var(--text-muted)">(${mc.length}일)</span>` : '<span style="color:var(--text-muted)">-</span>'}
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+    return html;
+  }
+
+  let sh = `<div style="font-size:11px;color:var(--text-muted);margin-bottom:14px;line-height:1.7;padding:8px 10px;background:var(--surface2);border-radius:8px">
+    수면은 <b>다음날 컨디션</b>에 영향을 미치므로, 당일 수면이 아닌 <b>전날(D-1)</b>·<b>이틀 전(D-2)</b> 수면을 기준으로 분석합니다.<br>
+    수면 점수는 가민 기기 기준 — 높을수록 수면의 질이 좋음을 의미합니다.
+  </div>`;
+
+  // D-1
+  sh += `<div style="font-size:12px;font-weight:600;margin-bottom:4px">전날 수면(D-1) → 오늘 컨디션</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">어젯밤 수면이 오늘 컨디션에 미치는 영향 — 가장 직접적인 수면 효과</div>`;
+  sh += renderSleepBands(1);
+
+  // D-2
+  sh += `<div style="font-size:12px;font-weight:600;margin-bottom:4px;margin-top:10px">이틀 전 수면(D-2) → 오늘 컨디션</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">이틀 전 수면이 오늘 컨디션에 미치는 영향 — 수면 부채(sleep debt) 누적 효과</div>`;
+  sh += renderSleepBands(2);
+
+  // D-1 좋음 vs 낮음 요약
   const pgood=[], ppoor=[];
   conds.forEach(c => {
     const ys = sleepMap[shiftDate(c.date,-1)];
@@ -3550,12 +3573,16 @@ function renderAnalysis() {
     else if (ys?.score < 65) ppoor.push(c.score);
   });
   const mg=mean2(pgood), mp=mean2(ppoor);
-  sh += `<div style="font-size:12px;color:var(--text-muted);font-weight:600;margin-bottom:6px">전날(D-1) 수면 → 오늘 컨디션</div>
-    <div style="font-size:12px;background:var(--surface2);border-radius:6px;padding:10px;line-height:1.9">
+  if (mg !== null || mp !== null) {
+    const diff = mg!=null&&mp!=null ? (mg-mp) : null;
+    sh += `<div style="margin-top:12px;padding:10px 12px;background:var(--surface2);border-radius:8px;font-size:12px;line-height:1.9">
+      <div style="font-weight:600;margin-bottom:4px">D-1 수면 좋음 vs 낮음 비교</div>
       전날 수면 <b style="color:#5ed8a4">좋음(80+)</b>: <b>${mg!=null?mg.toFixed(2):'-'}</b> (${pgood.length}일)<br>
       전날 수면 <b style="color:#f76a6a">낮음(&lt;65)</b>: <b>${mp!=null?mp.toFixed(2):'-'}</b> (${ppoor.length}일)
-      ${mg!=null&&mp!=null?`<br>차이: <b style="color:${mg>mp?'#5ed8a4':'#f76a6a'}">${mg>mp?'+':''}${(mg-mp).toFixed(2)}pts</b>`:''}
+      ${diff!=null?`<br>차이: <b style="color:${diff>0?'#5ed8a4':'#f76a6a'}">${diff>0?'+':''}${diff.toFixed(2)}pts</b>`:''}
     </div>`;
+  }
+
   document.getElementById('analysisSleep').innerHTML = sh;
 
   // ── 마지막 업데이트 시각 표시

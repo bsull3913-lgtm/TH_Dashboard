@@ -362,10 +362,68 @@
 
   /* ── GRID 2COL ── */
   .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  @media (max-width: 860px) {
-    .grid-2 { grid-template-columns: 1fr; }
-    .main { padding: 100px 16px 30px; }
-    .sidebar nav { flex-wrap: wrap; justify-content: flex-start; padding: 0 16px 10px; }
+  /* ── MOBILE RESPONSIVE ── */
+  .mobile-header { display: none; }
+  .sidebar-backdrop { display: none; }
+
+  @media (max-width: 768px) {
+    /* 모바일 헤더 */
+    .mobile-header {
+      display: flex; position: fixed; top: 0; left: 0; right: 0; height: 52px;
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      align-items: center; padding: 0 16px; gap: 12px; z-index: 150;
+    }
+    .mobile-header .logo { font-size: 14px; font-weight: 700; }
+    .hamburger {
+      background: none; border: none; color: var(--text);
+      font-size: 20px; cursor: pointer; padding: 4px; line-height: 1;
+    }
+    .mobile-sync-status { margin-left: auto; font-size: 11px; color: var(--muted,#71717a); }
+    .mobile-sync-status.ok { color: #5ed8a4; }
+
+    /* 사이드바 드로어 */
+    .sidebar {
+      transform: translateX(-100%);
+      transition: transform 0.25s ease;
+      z-index: 200;
+    }
+    .sidebar.open { transform: translateX(0); }
+
+    /* 백드롭 */
+    .sidebar-backdrop {
+      display: block; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.55); z-index: 199;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    .sidebar-backdrop.open { opacity: 1; pointer-events: auto; }
+
+    /* 메인 영역 */
+    .main {
+      margin-left: 0 !important;
+      max-width: 100vw !important;
+      padding: 68px 14px 30px !important;
+    }
+
+    /* 그리드 */
+    .grid-2 { grid-template-columns: 1fr !important; }
+
+    /* 홈 카드 2열 */
+    .home-card-wrap { flex: 0 0 calc(50% - 5px) !important; }
+
+    /* stat-chip 2열 wrap */
+    .stats-row { flex-wrap: wrap; }
+    .stat-chip { flex: 1 1 calc(50% - 6px); min-width: 120px; }
+
+    /* 차트 높이 축소 */
+    canvas { max-height: 240px; }
+
+    /* 테이블 스크롤 */
+    table { font-size: 12px; }
+    .card { overflow-x: auto; }
+
+    /* sync 버튼 숨기기 (모바일 헤더에서 처리) */
+    .sync-bar { display: none; }
   }
 
   /* ── IMPORT ZONE ── */
@@ -482,6 +540,14 @@
 </style>
 </head>
 <body>
+<!-- 모바일 헤더 -->
+<div class="mobile-header">
+  <button class="hamburger" onclick="toggleSidebar()">☰</button>
+  <span class="logo">🏃 내 건강</span>
+  <span class="mobile-sync-status" id="mobileSyncStatus"></span>
+</div>
+<!-- 사이드바 백드롭 -->
+<div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
 
 <!-- SIDEBAR -->
 <aside class="sidebar">
@@ -1221,6 +1287,15 @@ function navigate(page) {
   document.querySelector(`[data-page="${page}"]`).classList.add('active');
   currentPage = page;
   renderPage(page);
+  if (window.innerWidth <= 768) closeSidebar();
+}
+function toggleSidebar() {
+  document.querySelector('.sidebar').classList.toggle('open');
+  document.getElementById('sidebarBackdrop').classList.toggle('open');
+}
+function closeSidebar() {
+  document.querySelector('.sidebar').classList.remove('open');
+  document.getElementById('sidebarBackdrop').classList.remove('open');
 }
 
 function renderPage(page) {
@@ -3829,9 +3904,9 @@ function scheduleSync() {
 
 function setSyncStatus(cls, msg) {
   const el = document.getElementById('syncStatus');
-  if (!el) return;
-  el.className = 'sync-status' + (cls ? ' ' + cls : '');
-  el.textContent = msg;
+  if (el) { el.className = 'sync-status' + (cls ? ' ' + cls : ''); el.textContent = msg; }
+  const mel = document.getElementById('mobileSyncStatus');
+  if (mel) { mel.className = 'mobile-sync-status' + (cls === 'ok' ? ' ok' : ''); mel.textContent = cls === 'ok' ? msg : ''; }
 }
 
 function openSyncSettings() {

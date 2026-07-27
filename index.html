@@ -3278,21 +3278,21 @@ function renderAnalysis() {
   };
 
   const WINDOWS = [
-    { key:'D0',  label:'당일',  sub:'오늘' },
-    { key:'D1',  label:'D-1',  sub:'어제' },
-    { key:'D23', label:'D2~3', sub:'2~3일 전' },
-    { key:'D7',  label:'D7',   sub:'최근 7일(≥2회)' },
+    { key:'D0',  label:'당일',  sub:'오늘', tip:'그 요인이 있던 날 컨디션' },
+    { key:'D1',  label:'D-1',  sub:'어제',  tip:'전날 요인 → 오늘 컨디션' },
+    { key:'D23', label:'D2~3', sub:'2~3일 전', tip:'2~3일 전 요인의 누적 영향' },
+    { key:'D7',  label:'D7',   sub:'최근 7일(≥2회)', tip:'주간 빈도가 높을 때 영향' },
   ];
 
   const FACTORS = [
-    { key:'run',  label:'🏃 러닝',       col:'#7c6af7' },
-    { key:'fast', label:'🌙 단식',        col:'#5ed8a4' },
-    { key:'alc',  label:'🍺 음주',        col:'#f7a26a' },
-    { key:'sleep',label:'🛌 수면(≥75점)', col:'#5ed8a4' },
-    { key:'eye',  label:'👁 눈 통증',     col:'#f76a6a' },
-    { key:'mask', label:'🧴 마스크팩',    col:'#a78bfa' },
-    { key:'M',    label:'M',             col:'#7c6af7'  },
-    { key:'m',    label:'m',             col:'#f7c26a'  },
+    { key:'run',  label:'🏃 러닝',       col:'#7c6af7', desc:'유산소 운동 여부' },
+    { key:'fast', label:'🌙 단식',        col:'#5ed8a4', desc:'간헐적 단식 실시' },
+    { key:'alc',  label:'🍺 음주',        col:'#f7a26a', desc:'알코올 섭취 여부' },
+    { key:'sleep',label:'🛌 수면(≥75점)', col:'#5ed8a4', desc:'가민 수면점수 75+ 달성' },
+    { key:'eye',  label:'👁 눈 통증',     col:'#f76a6a', desc:'안구 통증·불편 기록' },
+    { key:'mask', label:'🧴 마스크팩',    col:'#a78bfa', desc:'피부 마스크팩 사용' },
+    { key:'M',    label:'M',             col:'#7c6af7',  desc:'굵고 정상적인 배변' },
+    { key:'m',    label:'m',             col:'#f7c26a',  desc:'가늘거나 불완전 배변' },
   ];
 
   // Pre-compute all factor × window effects
@@ -3375,9 +3375,10 @@ function renderAnalysis() {
           <tr style="border-bottom:2px solid var(--border)">
             <th style="text-align:left;padding:8px 10px;color:var(--text-muted);font-weight:500;min-width:110px">요인</th>
             ${WINDOWS.map(w => `
-              <th style="padding:8px 10px;text-align:center;color:var(--text-muted);font-weight:500">
+              <th style="padding:8px 10px;text-align:center;color:var(--text-muted);font-weight:500" title="${w.tip}">
                 <div style="font-size:12px;font-weight:600">${w.label}</div>
                 <div style="font-size:10px;margin-top:1px">${w.sub}</div>
+                <div style="font-size:9px;margin-top:2px;opacity:0.6;font-weight:400">${w.tip}</div>
               </th>`).join('')}
             <th style="padding:8px 10px;text-align:center;color:var(--text-muted);font-weight:500;width:60px">추세</th>
           </tr>
@@ -3390,6 +3391,7 @@ function renderAnalysis() {
             return `<tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
               <td style="padding:8px 10px;font-weight:500">
                 <span style="border-left:3px solid ${f.col};padding-left:6px">${f.label}</span>
+                ${f.desc ? `<div style="font-size:10px;color:var(--text-muted);padding-left:9px;margin-top:2px">${f.desc}</div>` : ''}
               </td>
               ${WINDOWS.map(w => {
                 const e = row[w.key];

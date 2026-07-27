@@ -411,6 +411,74 @@
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
   ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+
+  /* ── GIST SYNC ── */
+  .sync-bar {
+    padding: 10px 14px 14px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .sync-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .sync-btn {
+    flex: 1;
+    padding: 5px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text-muted);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .sync-btn:hover { color: var(--text); border-color: var(--accent); }
+  .sync-btn.primary { background: rgba(124,106,247,0.15); color: var(--accent); border-color: var(--accent); }
+  .sync-status {
+    font-size: 10px;
+    text-align: center;
+    padding: 2px 0;
+    border-radius: 4px;
+    color: var(--text-muted);
+    min-height: 16px;
+  }
+  .sync-status.ok   { color: #5ed8a4; }
+  .sync-status.error { color: #f76a6a; }
+  .sync-status.saving { color: #f7c26a; }
+  /* Modal */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 999;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    width: 420px;
+    max-width: 90vw;
+  }
+  .modal-box h3 { font-size: 15px; margin-bottom: 16px; }
+  .modal-box label { display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px; margin-top: 12px; }
+  .modal-box input[type=text], .modal-box input[type=password] {
+    width: 100%; padding: 8px 10px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); font-size: 13px;
+  }
+  .modal-box .modal-hint { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 20px; justify-content: flex-end; }
+  .modal-actions button { padding: 7px 16px; border-radius: 6px; border: 1px solid var(--border); cursor: pointer; font-size: 13px; }
+  .modal-actions .btn-save { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .modal-actions .btn-cancel { background: transparent; color: var(--text-muted); }
 </style>
 </head>
 <body>
@@ -451,7 +519,32 @@
     </div>
   </nav>
   <div class="sidebar-date" id="sidebarDate"></div>
+  <div class="sync-bar">
+    <div class="sync-row">
+      <button class="sync-btn primary" onclick="GistSync.pull()">⬇ 불러오기</button>
+      <button class="sync-btn primary" onclick="GistSync.push()">⬆ 저장</button>
+      <button class="sync-btn" onclick="openSyncSettings()" title="동기화 설정">⚙</button>
+    </div>
+    <div class="sync-status" id="syncStatus">미설정</div>
+  </div>
 </aside>
+
+<!-- Gist Sync Settings Modal -->
+<div class="modal-overlay" id="syncModal">
+  <div class="modal-box">
+    <h3>☁️ GitHub Gist 동기화 설정</h3>
+    <label>GitHub Personal Access Token</label>
+    <input type="password" id="syncToken" placeholder="ghp_xxxxxxxxxxxx" />
+    <p class="modal-hint">Settings → Developer settings → Personal access tokens → gist 권한 필요</p>
+    <label>Gist ID</label>
+    <input type="text" id="syncGistId" placeholder="abc123def456..." />
+    <p class="modal-hint">github.com/gist/[여기가 Gist ID]</p>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeSyncSettings()">취소</button>
+      <button class="btn-save" onclick="saveSyncSettings()">저장</button>
+    </div>
+  </div>
+</div>
 
 <main class="main">
 
@@ -2296,6 +2389,7 @@ function updateScoreColor(v) {}
 // ── 데이터 변경 시 분석 자동 갱신
 function notifyDataChanged() {
   if (currentPage === 'analysis') renderAnalysis();
+  scheduleSync();
 }
 
 function saveCondition() {
@@ -3374,7 +3468,7 @@ function restoreHomeOrder() {
 // ═══════════════════════════════════
 // INIT
 // ═══════════════════════════════════
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   // ── 인바디 데이터 (InBody-20260722.xlsx 전체 이식) ──
   if (!localStorage.getItem('inbodyXlsxLoaded')) {
     const inbodySeed = [
@@ -3671,6 +3765,101 @@ document.addEventListener('DOMContentLoaded', () => {
     const watchKeys = ['conditions','runs','fastings','eyes','skins','sleeps'];
     if (watchKeys.includes(e.key)) notifyDataChanged();
   });
+});
+
+// ═══════════════════════════════════
+// GITHUB GIST SYNC
+// ═══════════════════════════════════
+const SYNC_KEYS = ['conditions','runs','fastings','eyes','skins','sleeps','suppRecords','suppTypes','inbody','runnerGoal'];
+
+const GistSync = {
+  get token()  { return localStorage.getItem('gist_token')  || ''; },
+  get gistId() { return localStorage.getItem('gist_id') || ''; },
+  isConfigured() { return !!(this.token && this.gistId); },
+
+  async push() {
+    if (!this.isConfigured()) { setSyncStatus('','미설정'); return; }
+    setSyncStatus('saving','저장 중...');
+    const data = {};
+    SYNC_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v != null) data[k] = v; });
+    try {
+      const res = await fetch(`https://api.github.com/gists/${this.gistId}`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${this.token}`, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files: { 'health_data.json': { content: JSON.stringify(data) } } })
+      });
+      if (!res.ok) throw new Error(res.status);
+      const now = new Date();
+      const ts = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+      setSyncStatus('ok', `✓ ${ts} 저장됨`);
+    } catch(e) {
+      setSyncStatus('error','저장 실패 — 토큰/ID 확인');
+    }
+  },
+
+  async pull() {
+    if (!this.isConfigured()) { setSyncStatus('','미설정'); return; }
+    setSyncStatus('saving','불러오는 중...');
+    try {
+      const res = await fetch(`https://api.github.com/gists/${this.gistId}`, {
+        headers: { 'Authorization': `Bearer ${this.token}`, 'Accept': 'application/vnd.github+json' }
+      });
+      if (!res.ok) throw new Error(res.status);
+      const gist = await res.json();
+      const raw = gist.files['health_data.json']?.content;
+      if (!raw) throw new Error('no file');
+      const data = JSON.parse(raw);
+      SYNC_KEYS.forEach(k => { if (data[k] != null) localStorage.setItem(k, data[k]); });
+      const now = new Date();
+      const ts = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+      setSyncStatus('ok', `✓ ${ts} 불러옴`);
+      renderPage(currentPage);
+    } catch(e) {
+      setSyncStatus('error','불러오기 실패 — 토큰/ID 확인');
+    }
+  }
+};
+
+let _syncTimer = null;
+function scheduleSync() {
+  if (!GistSync.isConfigured()) return;
+  clearTimeout(_syncTimer);
+  _syncTimer = setTimeout(() => GistSync.push(), 2500);
+}
+
+function setSyncStatus(cls, msg) {
+  const el = document.getElementById('syncStatus');
+  if (!el) return;
+  el.className = 'sync-status' + (cls ? ' ' + cls : '');
+  el.textContent = msg;
+}
+
+function openSyncSettings() {
+  document.getElementById('syncToken').value = GistSync.token;
+  document.getElementById('syncGistId').value = GistSync.gistId;
+  document.getElementById('syncModal').classList.add('open');
+}
+function closeSyncSettings() {
+  document.getElementById('syncModal').classList.remove('open');
+}
+function saveSyncSettings() {
+  const token = document.getElementById('syncToken').value.trim();
+  const gistId = document.getElementById('syncGistId').value.trim();
+  if (!token || !gistId) { alert('토큰과 Gist ID를 모두 입력해줘'); return; }
+  localStorage.setItem('gist_token', token);
+  localStorage.setItem('gist_id', gistId);
+  closeSyncSettings();
+  setSyncStatus('saving','연결 확인 중...');
+  GistSync.pull();
+}
+
+// 페이지 로드 시 자동 pull (설정된 경우)
+window.addEventListener('load', () => {
+  if (GistSync.isConfigured()) {
+    GistSync.pull();
+  } else {
+    setSyncStatus('', '미설정');
+  }
 });
 </script>
 </body>

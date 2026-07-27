@@ -33,12 +33,17 @@
     display: flex; flex-direction: column; gap: 10px;
   }
   .bubble {
-    max-width: 78%; padding: 10px 14px;
+    max-width: 80%; padding: 10px 14px;
     border-radius: 18px; font-size: 14px; line-height: 1.55;
     white-space: pre-wrap; word-break: break-word;
   }
   .bubble.bot { background: var(--surface2); border-bottom-left-radius: 4px; align-self: flex-start; }
   .bubble.user { background: var(--accent); border-bottom-right-radius: 4px; align-self: flex-end; }
+  .bubble.info {
+    background: rgba(94,216,164,0.08); border: 1px solid rgba(94,216,164,0.2);
+    border-radius: 10px; align-self: stretch; max-width: 100%;
+    color: #ccc; font-size: 13px;
+  }
 
   .qr-wrap { padding: 4px 16px 8px; display: flex; flex-wrap: wrap; gap: 7px; flex-shrink: 0; }
   .qr {
@@ -63,8 +68,7 @@
   .send {
     width: 42px; height: 42px; border-radius: 50%; border: none;
     background: var(--accent); color: #fff; font-size: 20px;
-    cursor: pointer; display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
   }
 </style>
 </head>
@@ -74,10 +78,8 @@
   <div><h1>건강 기록 봇</h1><div class="sub">매일 데이터 입력</div></div>
   <div id="syncStatus">연결 중...</div>
 </div>
-
 <div class="chat-area" id="chatArea"></div>
 <div class="qr-wrap" id="qrWrap"></div>
-
 <div class="input-row">
   <input id="userInput" type="text" placeholder="메시지 입력..." enterkeyhint="send" />
   <button class="send" onclick="sendMsg()">↑</button>
@@ -92,6 +94,7 @@ let parsed = {};
 let step = 'INIT';
 let entry = {};
 let selectedSupps = new Set();
+let stepsQueue = []; // 아직 입력 안 된 항목들
 
 // ── Gist API ──
 async function gistPull() {
@@ -123,20 +126,24 @@ async function gistPush() {
   } catch { return false; }
 }
 
-// ── UI helpers ──
+// ── UI ──
 function bot(msg) {
   const el = document.createElement('div');
   el.className = 'bubble bot'; el.textContent = msg;
-  document.getElementById('chatArea').appendChild(el);
-  scroll();
+  chatArea().appendChild(el); scroll();
+}
+function info(msg) {
+  const el = document.createElement('div');
+  el.className = 'bubble info'; el.textContent = msg;
+  chatArea().appendChild(el); scroll();
 }
 function user(msg) {
   const el = document.createElement('div');
   el.className = 'bubble user'; el.textContent = msg;
-  document.getElementById('chatArea').appendChild(el);
-  scroll();
+  chatArea().appendChild(el); scroll();
 }
-function scroll() { const a = document.getElementById('chatArea'); a.scrollTop = a.scrollHeight; }
+function chatArea() { return document.getElementById('chatArea'); }
+function scroll() { const a = chatArea(); a.scrollTop = a.scrollHeight; }
 
 function setQR(opts, multi = false) {
   const wrap = document.getElementById('qrWrap');
@@ -157,7 +164,7 @@ function setQR(opts, multi = false) {
   if (multi) {
     const done = document.createElement('button');
     done.className = 'qr done-btn'; done.textContent = '✓ 완료';
-    done.onclick = () => go('__SUPP_DONE__');
+    done.onclick = () => go('__DONE__');
     wrap.appendChild(done);
   }
 }
@@ -167,7 +174,6 @@ function setSyncStatus(cls, msg) {
   el.textContent = msg; el.className = cls;
 }
 
-// ── Input ──
 document.getElementById('userInput').addEventListener('keydown', e => { if (e.key === 'Enter') sendMsg(); });
 function sendMsg() {
   const inp = document.getElementById('userInput');
@@ -175,12 +181,83 @@ function sendMsg() {
   inp.value = ''; user(v); setQR([]); go(v);
 }
 
-// ── Data helpers ──
+// ── 데이터 ──
 function today() { return new Date().toISOString().split('T')[0]; }
-function newEntry() {
-  return { date: today(), score: null, mBig: false, mSmall: false, alcohol: false,
+function newEntry(d) {
+  return { date: d || today(), score: null, mBig: false, mSmall: false, alcohol: false,
            ran: false, runDist: null, runTime: '', runHr: '',
            fasted: false, eyePain: false, eyeDrop: false, supps: [], mask: false, maskType: '' };
+}
+
+// ── 날짜 선택 후 기존 데이터 확인 ──
+function checkExisting(d) {
+  const cond = (parsed.conditions  || []).find(c => c.date === d);
+  const run  = (parsed.runs        || []).find(r => r.date === d);
+  const fast = (parsed.fastings    || []).find(f => f.date === d);
+  const eye  = (parsed.eyes        || []).find(e => e.date === d);
+  const supp = (parsed.suppRecords || []).find(s => s.date === d);
+  const skin = (parsed.skins       || []).find(s => s.date === d);
+
+  const filled = [];
+  const missing = [];
+
+  if (cond) {
+    const mms = [cond.mBig?'M':'', cond.mSmall?'m':'', cond.alcohol?'술':''].filter(Boolean).join('+') || '없음';
+    filled.push(`💪 컨디션: ${cond.score}점  M/m/술: ${mms}`);
+    entry.score = cond.score; entry.mBig = cond.mBig; entry.mSmall = cond.mSmall; entry.alcohol = cond.alcohol;
+  } else { missing.push('CONDITION'); }
+
+  if (run) {
+    filled.push(`🏃 러닝: ${run.dist}km ${run.time || ''}${run.hr ? ' HR'+run.hr : ''}`);
+    entry.ran = true; entry.runDist = run.dist; entry.runTime = run.time || ''; entry.runHr = run.hr || '';
+  } else { missing.push('RUN'); }
+
+  if (fast) {
+    filled.push(`🌙 단식: ${fast.fasted ? 'O' : 'X'}`);
+    entry.fasted = fast.fasted;
+  } else { missing.push('FAST'); }
+
+  if (eye) {
+    filled.push(`👁 눈: ${eye.pain ? (eye.drop ? 'O (안약O)' : 'O (안약X)') : 'X'}`);
+    entry.eyePain = eye.pain; entry.eyeDrop = eye.drop || false;
+  } else { missing.push('EYE'); }
+
+  if (supp) {
+    filled.push(`💊 영양제: ${(supp.list||[]).join(', ') || '없음'}`);
+    entry.supps = supp.list || [];
+  } else { missing.push('SUPP'); }
+
+  if (skin) {
+    filled.push(`🧴 마스크팩: ${skin.mask ? skin.status : 'X'}`);
+    entry.mask = skin.mask; entry.maskType = skin.status || '';
+  } else { missing.push('SKIN'); }
+
+  // 기존 항목 표시
+  if (filled.length > 0) {
+    info(`✅ ${d} 기입력 항목\n${filled.join('\n')}`);
+  }
+
+  if (missing.length === 0) {
+    bot('모든 항목이 이미 입력되어 있어! 수정할 항목 있어?');
+    setQR(['컨디션','러닝','단식','눈 통증','영양제','마스크팩','없음 (완료)']);
+    step = 'EDIT_PICK';
+  } else {
+    if (filled.length > 0) bot(`나머지 ${missing.length}개 항목 입력할게!`);
+    stepsQueue = [...missing];
+    nextStep();
+  }
+}
+
+// ── 큐에서 다음 스텝 실행 ──
+function nextStep() {
+  if (stepsQueue.length === 0) { showConfirm(); return; }
+  const s = stepsQueue.shift();
+  if (s === 'CONDITION') askCondition();
+  else if (s === 'RUN')  askRun();
+  else if (s === 'FAST') askFast();
+  else if (s === 'EYE')  askEye();
+  else if (s === 'SUPP') askSupp();
+  else if (s === 'SKIN') askSkin();
 }
 
 // ── State machine ──
@@ -200,7 +277,7 @@ async function go(val) {
         askDate();
       } else {
         setSyncStatus('err', '연결 실패');
-        bot('토큰 또는 Gist ID가 잘못된 것 같아. 다시 입력해줘.\n\nGitHub Personal Access Token:');
+        bot('연결 실패. 토큰을 다시 입력해줘:');
         step = 'SETUP_TOKEN';
       }
       break;
@@ -208,112 +285,132 @@ async function go(val) {
     case 'DATE':
       if (val === '오늘') entry.date = today();
       else if (/^\d{4}-\d{2}-\d{2}$/.test(val)) entry.date = val;
-      else { bot('날짜 형식이 맞지 않아 (예: 2026-07-28)'); return; }
-      askCondition(); break;
+      else { bot('형식이 맞지 않아 (예: 2026-07-28)'); return; }
+      checkExisting(entry.date);
+      break;
+
+    case 'EDIT_PICK':
+      if (val === '없음 (완료)') { showConfirm(); break; }
+      const editMap = { '컨디션':'CONDITION', '러닝':'RUN', '단식':'FAST', '눈 통증':'EYE', '영양제':'SUPP', '마스크팩':'SKIN' };
+      if (editMap[val]) { stepsQueue = [editMap[val]]; nextStep(); }
+      break;
 
     case 'CONDITION':
       const sc = parseInt(val);
       if (sc >= 1 && sc <= 5) { entry.score = sc; askMMS(); }
-      else bot('1~5 사이 숫자를 눌러줘 😊'); break;
+      else bot('1~5 숫자를 선택해줘 😊');
+      break;
 
     case 'MMS':
-      entry.mBig    = val.includes('M') && !val.toLowerCase().startsWith('m');
+      entry.mBig    = val.includes('M') && !val.startsWith('m');
       entry.mSmall  = val.startsWith('m') || val.includes('+m');
       entry.alcohol = val.includes('술');
-      askRun(); break;
+      nextStep(); break;
 
     case 'RUN':
       entry.ran = (val === '했음');
-      if (entry.ran) { bot('거리 시간 심박을 입력해줘\n(예: 6.4 47:08 161)'); step = 'RUN_DETAIL'; }
-      else askFast(); break;
+      if (entry.ran) { bot('거리 시간 심박 입력해줘\n(예: 6.4 47:08 161)'); step = 'RUN_DETAIL'; }
+      else { entry.runDist = null; nextStep(); }
+      break;
 
     case 'RUN_DETAIL': {
       const p = val.split(/\s+/);
       entry.runDist = parseFloat(p[0]) || null;
       entry.runTime = p[1] || '';
       entry.runHr   = p[2] || '';
-      askFast(); break;
+      nextStep(); break;
     }
 
     case 'FAST':
       entry.fasted = (val === '했음');
-      askEye(); break;
+      nextStep(); break;
 
     case 'EYE':
       entry.eyePain = (val !== '없었음');
       entry.eyeDrop = val.includes('안약 O');
-      askSupp(); break;
+      nextStep(); break;
 
     case 'SUPP':
-      if (val === '__SUPP_DONE__') {
+      if (val === '__DONE__') {
         entry.supps = [...selectedSupps];
         user(entry.supps.length ? entry.supps.join(', ') : '없음');
         setQR([]);
-        askSkin();
+        nextStep();
       } break;
 
     case 'SKIN':
       entry.mask     = (val !== '안 함');
       entry.maskType = entry.mask ? val : '';
-      showConfirm(); break;
+      nextStep(); break;
 
     case 'CONFIRM':
-      if (val === '저장') { await saveEntry(); }
-      else { bot('취소했어. 다시 할게!'); entry = newEntry(); selectedSupps = new Set(); askDate(); }
+      if (val === '저장') await saveEntry();
+      else { bot('취소! 다시 입력할게.'); resetEntry(); askDate(); }
       break;
 
     case 'RESTART':
-      if (val === '네') { entry = newEntry(); selectedSupps = new Set(); askDate(); }
+      if (val === '네') { resetEntry(); askDate(); }
       break;
   }
 }
 
-// ── Step functions ──
+// ── Step 함수들 ──
 function askDate() {
   bot(`오늘이 ${today()} 맞아?`);
   setQR(['오늘', '다른 날짜 직접 입력']);
   step = 'DATE';
 }
-// override '다른 날짜' to just set step
-document.getElementById('qrWrap');
-
 function askCondition() {
-  bot(`${entry.date} 컨디션 점수는? (1~5점)`);
+  bot(`컨디션 점수는? (1~5점)`);
   setQR(['1','2','3','4','5']);
   step = 'CONDITION';
 }
-
 function askMMS() {
   bot('M / m / 술 체크해줘');
   setQR(['없음','M','m','술','M+술','m+술']);
   step = 'MMS';
 }
-
 function askRun() {
-  bot('오늘 러닝했어?');
+  bot('러닝했어?');
   setQR(['했음','안 했음']);
   step = 'RUN';
 }
-
 function askFast() {
   bot('저녁 단식했어?');
   setQR(['했음','안 했음']);
   step = 'FAST';
 }
-
 function askEye() {
   bot('눈 통증 있었어?');
   setQR(['없었음','있었음 (안약 O)','있었음 (안약 X)']);
   step = 'EYE';
 }
-
 function askSupp() {
   selectedSupps = new Set();
-  bot('영양제 선택해줘 (여러 개 선택 후 완료)');
-  setQR(['크레아틴','오메가3','오메가3(x3)','유산균','비타민C'], true);
+  // 기존 영양제가 있으면 미리 선택 표시
+  if (entry.supps && entry.supps.length) {
+    entry.supps.forEach(s => selectedSupps.add(s));
+  }
+  bot('영양제 선택해줘 (복수 선택 후 완료)');
+  const opts = ['크레아틴','오메가3','오메가3(x3)','유산균','비타민C'];
+  const wrap = document.getElementById('qrWrap');
+  wrap.innerHTML = '';
+  opts.forEach(o => {
+    const b = document.createElement('button');
+    b.className = 'qr' + (selectedSupps.has(o) ? ' on' : '');
+    b.textContent = o;
+    b.onclick = () => {
+      if (selectedSupps.has(o)) { selectedSupps.delete(o); b.classList.remove('on'); }
+      else { selectedSupps.add(o); b.classList.add('on'); }
+    };
+    wrap.appendChild(b);
+  });
+  const done = document.createElement('button');
+  done.className = 'qr done-btn'; done.textContent = '✓ 완료';
+  done.onclick = () => go('__DONE__');
+  wrap.appendChild(done);
   step = 'SUPP';
 }
-
 function askSkin() {
   bot('마스크팩 했어?');
   setQR(['안 함','파티온팩','Azelaic Acid팩','기타']);
@@ -322,11 +419,10 @@ function askSkin() {
 
 function showConfirm() {
   const mms = [entry.mBig?'M':'', entry.mSmall?'m':'', entry.alcohol?'술':''].filter(Boolean).join('+') || '없음';
-  const run = entry.ran ? `${entry.runDist}km ${entry.runTime}${entry.runHr ? ' HR'+entry.runHr : ''}` : 'X';
+  const run = entry.ran ? `${entry.runDist}km ${entry.runTime}${entry.runHr?' HR'+entry.runHr:''}` : 'X';
   bot([
     `📅 ${entry.date}`,
-    `💪 컨디션: ${entry.score}점`,
-    `🔖 M/m/술: ${mms}`,
+    `💪 컨디션: ${entry.score ?? '-'}점  M/m/술: ${mms}`,
     `🏃 러닝: ${run}`,
     `🌙 단식: ${entry.fasted ? 'O' : 'X'}`,
     `👁 눈 통증: ${entry.eyePain ? (entry.eyeDrop?'O(안약O)':'O(안약X)') : 'X'}`,
@@ -339,8 +435,7 @@ function showConfirm() {
 }
 
 async function saveEntry() {
-  bot('저장 중...');
-  setQR([]);
+  bot('저장 중...'); setQR([]);
   const d = entry.date, ts = Date.now();
 
   // conditions
@@ -360,13 +455,11 @@ async function saveEntry() {
   }
 
   // fastings
-  if (entry.fasted) {
-    const fasts = parsed.fastings || [];
-    const fi = fasts.findIndex(f => f.date === d);
-    const fr = { id:fi>=0?fasts[fi].id:ts+2, date:d, fasted:true };
-    if (fi>=0) fasts[fi]={...fasts[fi],...fr}; else fasts.push(fr);
-    parsed.fastings = fasts;
-  }
+  const fasts = parsed.fastings || [];
+  const fi = fasts.findIndex(f => f.date === d);
+  const fr = { id:fi>=0?fasts[fi].id:ts+2, date:d, fasted:entry.fasted };
+  if (fi>=0) fasts[fi]={...fasts[fi],...fr}; else if(entry.fasted) fasts.push(fr);
+  parsed.fastings = fasts;
 
   // eyes
   if (entry.eyePain) {
@@ -403,8 +496,12 @@ async function saveEntry() {
     setQR(['네']);
     step = 'RESTART';
   } else {
-    bot('❌ 저장 실패. 토큰/Gist ID를 확인해줘.');
+    bot('❌ 저장 실패. 토큰/Gist ID 확인해줘.');
   }
+}
+
+function resetEntry() {
+  entry = newEntry(); selectedSupps = new Set(); stepsQueue = [];
 }
 
 // ── Init ──
@@ -418,6 +515,7 @@ async function init() {
     const ok = await gistPull();
     if (ok) {
       setSyncStatus('ok', '✓ 연결됨');
+      entry = newEntry();
       askDate();
     } else {
       setSyncStatus('err', '연결 실패');

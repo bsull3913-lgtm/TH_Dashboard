@@ -53,6 +53,7 @@
   }
   .qr:active, .qr.on { background: var(--accent); border-color: var(--accent); }
   .qr.done-btn { background: rgba(94,216,164,.15); border-color: var(--accent2); color: var(--accent2); }
+  .qr.skip-btn { background: transparent; border-color: var(--border); color: var(--muted); font-size: 12px; }
 
   .input-row {
     padding: 10px 14px 14px; background: var(--surface);
@@ -145,7 +146,7 @@ function user(msg) {
 function chatArea() { return document.getElementById('chatArea'); }
 function scroll() { const a = chatArea(); a.scrollTop = a.scrollHeight; }
 
-function setQR(opts, multi = false) {
+function setQR(opts, multi = false, skippable = false) {
   const wrap = document.getElementById('qrWrap');
   wrap.innerHTML = '';
   opts.forEach(o => {
@@ -166,6 +167,12 @@ function setQR(opts, multi = false) {
     done.className = 'qr done-btn'; done.textContent = '✓ 완료';
     done.onclick = () => go('__DONE__');
     wrap.appendChild(done);
+  }
+  if (skippable) {
+    const skip = document.createElement('button');
+    skip.className = 'qr skip-btn'; skip.textContent = '건너뛰기';
+    skip.onclick = () => { user('건너뛰기'); setQR([]); go('__SKIP__'); };
+    wrap.appendChild(skip);
   }
 }
 
@@ -322,15 +329,18 @@ async function go(val) {
     }
 
     case 'FAST':
+      if (val === '__SKIP__') { nextStep(); break; }
       entry.fasted = (val === '했음');
       nextStep(); break;
 
     case 'EYE':
+      if (val === '__SKIP__') { nextStep(); break; }
       entry.eyePain = (val !== '없었음');
       entry.eyeDrop = val.includes('안약 O');
       nextStep(); break;
 
     case 'SUPP':
+      if (val === '__SKIP__') { nextStep(); break; }
       if (val === '__DONE__') {
         entry.supps = [...selectedSupps];
         user(entry.supps.length ? entry.supps.join(', ') : '없음');
@@ -339,6 +349,7 @@ async function go(val) {
       } break;
 
     case 'SKIN':
+      if (val === '__SKIP__') { nextStep(); break; }
       entry.mask     = (val !== '안 함');
       entry.maskType = entry.mask ? val : '';
       nextStep(); break;
@@ -372,17 +383,17 @@ function askMMS() {
 }
 function askRun() {
   bot('러닝했어?');
-  setQR(['했음','안 했음']);
+  setQR(['했음','안 했음'], false, true);
   step = 'RUN';
 }
 function askFast() {
   bot('저녁 단식했어?');
-  setQR(['했음','안 했음']);
+  setQR(['했음','안 했음'], false, true);
   step = 'FAST';
 }
 function askEye() {
   bot('눈 통증 있었어?');
-  setQR(['없었음','있었음 (안약 O)','있었음 (안약 X)']);
+  setQR(['없었음','있었음 (안약 O)','있었음 (안약 X)'], false, true);
   step = 'EYE';
 }
 function askSupp() {
@@ -409,11 +420,15 @@ function askSupp() {
   done.className = 'qr done-btn'; done.textContent = '✓ 완료';
   done.onclick = () => go('__DONE__');
   wrap.appendChild(done);
+  const skip = document.createElement('button');
+  skip.className = 'qr skip-btn'; skip.textContent = '건너뛰기';
+  skip.onclick = () => { user('건너뛰기'); setQR([]); go('__SKIP__'); };
+  wrap.appendChild(skip);
   step = 'SUPP';
 }
 function askSkin() {
   bot('마스크팩 했어?');
-  setQR(['안 함','파티온팩','Azelaic Acid팩','기타']);
+  setQR(['안 함','파티온팩','Azelaic Acid팩','기타'], false, true);
   step = 'SKIN';
 }
 

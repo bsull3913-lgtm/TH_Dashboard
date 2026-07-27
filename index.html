@@ -3630,6 +3630,12 @@ function restoreHomeOrder() {
 // INIT
 // ═══════════════════════════════════
 document.addEventListener('DOMContentLoaded', async () => {
+  // ── Gist pull 먼저 (시드보다 앞서 실행) ──
+  if (GistSync.isConfigured()) {
+    await GistSync.pull();
+  } else {
+    setSyncStatus('', '미설정');
+  }
   // ── 인바디 데이터 (InBody-20260722.xlsx 전체 이식) ──
   if (!localStorage.getItem('inbodyXlsxLoaded')) {
     const inbodySeed = [
@@ -3726,25 +3732,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   DB.set('skins', skinSeed);
 
-  // 영양제: 크레아틴 7/1~오늘, 오늘은 오메가3·유산균도 추가
-  const suppTypes = DB.getObj('suppTypes', { list: [] });
-  ['크레아틴','오메가3','유산균','오메가3(x3)'].forEach(s => { if (!suppTypes.list.includes(s)) suppTypes.list.push(s); });
-  DB.setObj('suppTypes', suppTypes);
-  const suppRecords = DB.get('suppRecords');
-  const start = new Date('2026-07-01');
-  const end = new Date(td);
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const dateStr = d.toISOString().split('T')[0];
-    const list = dateStr === '2026-07-22' ? ['크레아틴','유산균','오메가3(x3)']
-              : dateStr === '2026-07-24' ? ['크레아틴','오메가3(x3)','비타민C']
-              : dateStr === '2026-07-27' ? ['크레아틴','오메가3','유산균']
-              : dateStr <= '2026-07-19'  ? ['크레아틴','오메가3','유산균']
-              : ['크레아틴'];
-    const idx = suppRecords.findIndex(r => r.date === dateStr);
-    if (idx >= 0) suppRecords[idx].list = list;
-    else suppRecords.push({ id: 2000 + suppRecords.length, date: dateStr, list, memo: '' });
+  // 영양제 시드 (최초 1회만)
+  if (!localStorage.getItem('suppSeedLoaded')) {
+    const suppTypes = DB.getObj('suppTypes', { list: [] });
+    ['크레아틴','오메가3','유산균','오메가3(x3)','비타민C'].forEach(s => { if (!suppTypes.list.includes(s)) suppTypes.list.push(s); });
+    DB.setObj('suppTypes', suppTypes);
+    const suppRecords = DB.get('suppRecords');
+    const start = new Date('2026-07-01');
+    const end = new Date(td);
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().split('T')[0];
+      const list = dateStr === '2026-07-22' ? ['크레아틴','유산균','오메가3(x3)']
+                : dateStr === '2026-07-24' ? ['크레아틴','오메가3(x3)','비타민C']
+                : dateStr === '2026-07-27' ? ['크레아틴','오메가3','유산균']
+                : dateStr <= '2026-07-19'  ? ['크레아틴','오메가3','유산균']
+                : ['크레아틴'];
+      const idx = suppRecords.findIndex(r => r.date === dateStr);
+      if (idx < 0) suppRecords.push({ id: 2000 + suppRecords.length, date: dateStr, list, memo: '' });
+    }
+    DB.set('suppRecords', suppRecords);
+    localStorage.setItem('suppSeedLoaded', '1');
   }
-  DB.set('suppRecords', suppRecords);
 
   // 눈 상태: 오늘 통증 + 안약
   const eyeSeed = DB.get('eyes');
@@ -4014,14 +4022,7 @@ function saveSyncSettings() {
   GistSync.pull();
 }
 
-// 페이지 로드 시 자동 pull (설정된 경우)
-window.addEventListener('load', () => {
-  if (GistSync.isConfigured()) {
-    GistSync.pull();
-  } else {
-    setSyncStatus('', '미설정');
-  }
-});
+// 자동 pull은 DOMContentLoaded에서 처리됨
 </script>
 </body>
 </html>

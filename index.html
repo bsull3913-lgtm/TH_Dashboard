@@ -959,8 +959,12 @@
         </select>
       </div>
       <div class="form-group" style="margin-bottom:14px">
-        <label>메모 (트러블, 특이사항 등)</label>
-        <textarea id="skinMemo" placeholder="오늘 피부 상태를 기록하세요..."></textarea>
+        <label>팩 종류</label>
+        <div id="skinPackSelector" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+        <div style="display:flex;gap:6px">
+          <input type="text" id="newSkinPack" placeholder="새 팩 종류 추가..." style="flex:1;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px" onkeydown="if(event.key==='Enter')addSkinPackType()">
+          <button class="btn btn-outline" onclick="addSkinPackType()">+</button>
+        </div>
       </div>
       <button class="btn btn-primary" style="width:100%" onclick="addSkin()">저장</button>
     </div>
@@ -989,7 +993,7 @@
     <div class="card-title">피부 케어 기록</div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>날짜</th><th>마스크팩</th><th>피부상태</th><th>메모</th><th></th></tr></thead>
+        <thead><tr><th>날짜</th><th>마스크팩</th><th>피부상태</th><th>팩 종류</th><th></th></tr></thead>
         <tbody id="skinTable"></tbody>
       </table>
       <div class="empty-state" id="skinEmpty">피부 케어 기록을 시작해보세요 🧴</div>
@@ -2219,6 +2223,41 @@ function renderInbody() {
 let skinCalState = { year: new Date().getFullYear(), month: new Date().getMonth() };
 let selectedSkinDate = null;
 let maskOn = false;
+let selectedSkinPacks = new Set();
+
+function addSkinPackType() {
+  const val = document.getElementById('newSkinPack').value.trim();
+  if (!val) return;
+  const types = DB.getObj('skinPackTypes', { list: [] });
+  if (!types.list.includes(val)) { types.list.push(val); DB.setObj('skinPackTypes', types); }
+  document.getElementById('newSkinPack').value = '';
+  renderSkinPackSelector();
+}
+
+function deleteSkinPackType(name) {
+  const types = DB.getObj('skinPackTypes', { list: [] });
+  types.list = types.list.filter(t => t !== name);
+  DB.setObj('skinPackTypes', types);
+  selectedSkinPacks.delete(name);
+  renderSkinPackSelector();
+}
+
+function renderSkinPackSelector() {
+  const types = DB.getObj('skinPackTypes', { list: [] });
+  const el = document.getElementById('skinPackSelector');
+  if (!el) return;
+  el.innerHTML = types.list.map(t => `
+    <div style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;border:1.5px solid var(--border);cursor:pointer;font-size:12px;background:${selectedSkinPacks.has(t)?'var(--accent)':'var(--surface2)'};color:${selectedSkinPacks.has(t)?'#fff':'var(--text)'};transition:all 0.15s"
+         onclick="toggleSkinPack('${t}')">
+      ${t}
+      <span style="font-size:10px;opacity:0.6;margin-left:2px" onclick="event.stopPropagation();deleteSkinPackType('${t}')">✕</span>
+    </div>`).join('');
+}
+
+function toggleSkinPack(name) {
+  selectedSkinPacks.has(name) ? selectedSkinPacks.delete(name) : selectedSkinPacks.add(name);
+  renderSkinPackSelector();
+}
 
 function selectSkinDate(dateStr) {
   selectedSkinDate = dateStr;
@@ -2228,18 +2267,20 @@ function selectSkinDate(dateStr) {
   document.getElementById('maskToggle').classList.toggle('on', maskOn);
   document.getElementById('maskLabel').textContent = maskOn ? '✓ 마스크팩 했어요' : '안 함';
   document.getElementById('skinStatus').value = rec ? (rec.status || '') : '';
-  document.getElementById('skinMemo').value = rec ? (rec.memo || '') : '';
+  selectedSkinPacks = new Set(rec?.packTypes || []);
+  renderSkinPackSelector();
   // detail panel
   const el = document.getElementById('skinCalDetail');
   if (!rec) {
     el.innerHTML = `<div class="cal-detail-empty">📅 ${fmtDateLong(dateStr)} — 기록 없음</div>`;
   } else {
+    const packs = (rec.packTypes||[]).map(p=>`<span class="cal-detail-badge yes">${p}</span>`).join('');
     el.innerHTML = `<div class="cal-detail">
       <div class="cal-detail-date">📅 ${fmtDateLong(dateStr)}</div>
       <div class="cal-detail-row">
         <span class="cal-detail-badge ${rec.mask ? 'yes' : 'no'}">${rec.mask ? '✓ 마스크팩' : '마스크팩 없음'}</span>
         ${rec.status ? `<span class="cal-detail-badge yes">${rec.status}</span>` : ''}
-        ${rec.memo ? `<span style="color:var(--text-muted)">${rec.memo}</span>` : ''}
+        ${packs}
       </div>
     </div>`;
   }
@@ -2257,17 +2298,18 @@ function toggleMask() {
 function addSkin() {
   const date = document.getElementById('skinDate').value || today();
   const status = document.getElementById('skinStatus').value;
-  const memo = document.getElementById('skinMemo').value;
+  const packTypes = [...selectedSkinPacks];
   const data = DB.get('skins');
   const existing = data.findIndex(s => s.date === date);
-  const record = { id: Date.now(), date, mask: maskOn, status, memo };
+  const record = { id: Date.now(), date, mask: maskOn, status, packTypes };
   if (existing >= 0) data[existing] = record; else data.push(record);
   DB.set('skins', data);
-  document.getElementById('skinMemo').value = '';
   document.getElementById('skinStatus').value = '';
+  selectedSkinPacks = new Set();
   maskOn = false;
   document.getElementById('maskToggle').classList.remove('on');
   document.getElementById('maskLabel').textContent = '안 함';
+  renderSkinPackSelector();
   selectedSkinDate = date;
   renderSkin();
 }
@@ -2292,6 +2334,7 @@ function renderSkinCal() {
 
 function renderSkin() {
   document.getElementById('skinDate').value = selectedSkinDate || today();
+  renderSkinPackSelector();
   renderSkinCal();
   const data = DB.get('skins').sort((a,b) => b.date.localeCompare(a.date));
   const tbody = document.getElementById('skinTable');
@@ -2304,7 +2347,7 @@ function renderSkin() {
       <td>${fmtDateLong(r.date)}</td>
       <td>${r.mask ? '<span class="tag green">✓ 마스크팩</span>' : '<span style="color:var(--text-muted);font-size:13px">-</span>'}</td>
       <td>${r.status ? (statusEmoji[r.status]||'') + ' ' + r.status : '-'}</td>
-      <td style="color:var(--text-muted);font-size:13px">${r.memo || ''}</td>
+      <td style="font-size:12px">${(r.packTypes||[]).map(p=>`<span class="tag" style="background:var(--surface2);border:1px solid var(--border);margin:1px">${p}</span>`).join('') || '<span style="color:var(--text-muted)">-</span>'}</td>
       <td><button class="btn btn-danger" onclick="deleteSkin(${r.id})">삭제</button></td>
     </tr>
   `).join('');
@@ -3291,8 +3334,8 @@ function renderAnalysis() {
     { key:'sleep',label:'🛌 수면(≥75점)', col:'#5ed8a4', desc:'가민 수면점수 75+ 달성' },
     { key:'eye',  label:'👁 눈 통증',     col:'#f76a6a', desc:'안구 통증·불편 기록' },
     { key:'mask', label:'🧴 마스크팩',    col:'#a78bfa', desc:'피부 마스크팩 사용' },
-    { key:'M',    label:'M',             col:'#7c6af7',  desc:'굵고 정상적인 배변' },
-    { key:'m',    label:'m',             col:'#f7c26a',  desc:'가늘거나 불완전 배변' },
+    { key:'M',    label:'M',             col:'#7c6af7',  desc:'' },
+    { key:'m',    label:'m',             col:'#f7c26a',  desc:'' },
   ];
 
   // Pre-compute all factor × window effects

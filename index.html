@@ -1,0 +1,3677 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>내 건강 대시보드</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f0f11;
+    --surface: #161618;
+    --surface2: #1d1d20;
+    --border: #27272a;
+    --accent: #7c6af7;
+    --accent2: #5ed8a4;
+    --accent3: #f76a6a;
+    --accent4: #f7c26a;
+    --text: #ffffff;
+    --text-muted: #71717a;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, sans-serif;
+    min-height: 100vh;
+    display: flex;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    width: 220px;
+    min-height: 100vh;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    left: 0; top: 0;
+    padding: 24px 0 20px;
+    z-index: 100;
+  }
+  .sidebar-logo {
+    padding: 0 18px 22px;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 8px;
+  }
+  .sidebar-logo span {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-muted);
+  }
+  .sidebar nav {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 4px 0;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 18px;
+    cursor: grab;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.15s;
+    border-left: 2px solid transparent;
+    user-select: none;
+    position: relative;
+  }
+  .nav-item:hover { color: var(--text); background: var(--surface2); }
+  .nav-item.active { color: var(--accent); border-left-color: var(--accent); background: rgba(124,106,247,0.08); }
+  .nav-item.dragging { opacity: 0.35; background: transparent; }
+  /* ── home grid drag ── */
+  .home-grid { display:flex; flex-wrap:wrap; gap:10px; }
+  .home-card-wrap { flex: 0 0 calc(20% - 8px); box-sizing:border-box; cursor:default; min-width:0; }
+  .home-card-wrap.dragging { opacity:0.3; }
+  .home-card-wrap.drag-over > .card { outline:2px dashed var(--accent); }
+  .home-drag-handle {
+    float:right; opacity:0; cursor:grab; font-size:13px;
+    color:var(--text-muted); transition:opacity 0.15s; letter-spacing:1px;
+  }
+  .home-card-wrap:hover .home-drag-handle { opacity:1; }
+  /* ── home page compact overrides ── */
+  #page-home .page-header { margin-bottom: 10px; }
+  #page-home .page-header h1 { font-size: 16px; }
+  #page-home .page-header p { display: none; }
+  #page-home .stats-row { margin-bottom: 10px; gap: 8px; }
+  #page-home .stat-chip { padding: 10px 14px; min-width: 0; }
+  #page-home .stat-chip .lbl { font-size: 10px; margin-bottom: 4px; }
+  #page-home .stat-chip .val { font-size: 20px; }
+  #page-home .card { padding: 12px 14px; }
+  #page-home .card-title { font-size: 11px; margin-bottom: 8px; }
+  #page-home .chart-box { height: 140px; }
+  #page-home .cal-day { font-size: 9px; }
+  #page-home .cal-day-label { font-size: 9px; padding: 2px 0; }
+  #page-home .cal-grid { gap: 1px; }
+  #page-home .mini-cal { overflow: hidden; }
+  #page-home .mini-cal .cal-grid { gap: 1px; }
+  #page-home .mini-cal .cal-day {
+    aspect-ratio: unset;
+    height: 17px;
+    font-size: 9px;
+    padding: 0;
+    border-radius: 3px;
+    justify-content: center;
+    align-items: center;
+  }
+  #page-home .mini-cal .cal-day .dot { bottom: 1px; width: 3px; height: 3px; }
+  #page-home .home-card-wrap { overflow: hidden; }
+  .nav-item.drag-over {
+    background: rgba(124,106,247,0.1);
+    border-left-color: var(--accent);
+  }
+  .nav-item.drag-over::before {
+    content: '';
+    position: absolute;
+    top: -1px; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+    border-radius: 1px;
+  }
+  .nav-drag-handle {
+    position: absolute;
+    right: 12px;
+    color: var(--border);
+    font-size: 12px;
+    opacity: 0;
+    transition: opacity 0.15s;
+    cursor: grab;
+    letter-spacing: -1px;
+  }
+  .nav-item:hover .nav-drag-handle { opacity: 1; }
+  .nav-icon { font-size: 15px; width: 20px; text-align: center; flex-shrink: 0; }
+  .sidebar-date {
+    padding: 14px 18px 0;
+    font-size: 11px;
+    color: var(--text-muted);
+    border-top: 1px solid var(--border);
+    line-height: 1.6;
+  }
+
+  /* ── MAIN ── */
+  .main {
+    margin-left: 220px;
+    flex: 1;
+    padding: 32px 32px 40px;
+    max-width: calc(100vw - 220px);
+  }
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* ── PAGE HEADER ── */
+  .page-header {
+    margin-bottom: 22px;
+  }
+  .page-header h1 {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+  .page-header p { color: var(--text-muted); font-size: 13px; margin-top: 3px; }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+    margin-bottom: 14px;
+  }
+  .card-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    letter-spacing: 0.3px;
+    margin-bottom: 14px;
+  }
+
+  /* ── FORMS ── */
+  .form-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 90px; }
+  .form-group label { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+  input, select, textarea {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 8px 11px;
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s;
+    width: 100%;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 70px; }
+  input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.6); }
+
+  /* ── BUTTONS ── */
+  .btn {
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: inherit;
+    font-weight: 500;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-primary:hover { background: #6a59e0; }
+  .btn-success { background: var(--accent2); color: #0a0a0c; border-color: var(--accent2); }
+  .btn-danger { background: transparent; border-color: var(--border); color: var(--text-muted); font-size: 11px; padding: 4px 9px; }
+  .btn-danger:hover { border-color: var(--accent3); color: var(--accent3); }
+  .btn-outline { background: transparent; border-color: var(--border); color: var(--text-muted); }
+  .btn-outline:hover { color: var(--text); border-color: #3f3f46; }
+
+  /* ── TABLES ── */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    text-align: left;
+    padding: 10px 12px;
+    font-size: 11px;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    font-weight: 500;
+    white-space: nowrap;
+    letter-spacing: 0.3px;
+  }
+  td { padding: 11px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* ── STAT CHIPS ── */
+  .stats-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .stat-chip {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 22px;
+    flex: 1;
+    min-width: 130px;
+  }
+  .stat-chip .lbl { font-size: 11px; color: var(--text-muted); font-weight: 500; margin-bottom: 8px; letter-spacing: 0.3px; }
+  .stat-chip .val { font-size: 28px; font-weight: 700; line-height: 1; }
+  .stat-chip .sub { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+  /* ── CALENDAR GRID ── */
+  .cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+  .cal-day-label { text-align: center; font-size: 11px; color: var(--text-muted); padding: 4px 0; font-weight: 500; }
+  .cal-day {
+    aspect-ratio: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 5px;
+    font-size: 12px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.12s;
+    position: relative;
+    min-height: 34px;
+    color: var(--text-muted);
+  }
+  .cal-day:hover { background: var(--surface2); color: var(--text); }
+  .cal-day.empty { cursor: default; }
+  .cal-day.today { background: rgba(124,106,247,0.12); border-color: rgba(124,106,247,0.4); color: var(--accent); font-weight: 600; }
+  .cal-day.marked        { background: rgba(94,216,164,0.1);  border-color: rgba(94,216,164,0.25);  color: var(--text); }
+  .cal-day.marked-run    { background: rgba(124,106,247,0.1); border-color: rgba(124,106,247,0.25); color: var(--text); }
+  .cal-day.marked-pain   { background: rgba(247,106,106,0.1); border-color: rgba(247,106,106,0.25); color: var(--text); }
+  .cal-day.marked-purple { background: rgba(124,106,247,0.13); border-color: rgba(124,106,247,0.35); color: var(--text); }
+  .cal-day.marked-yellow { background: rgba(247,194,106,0.13); border-color: rgba(247,194,106,0.35); color: var(--text); }
+  .cal-day.marked-red    { background: rgba(247,106,106,0.13); border-color: rgba(247,106,106,0.35); color: var(--text); }
+  .cal-day .dot { width: 4px; height: 4px; border-radius: 50%; position: absolute; bottom: 3px; }
+  .cal-day.marked .dot        { background: var(--accent2); }
+  .cal-day.marked-run .dot    { background: var(--accent); }
+  .cal-day.marked-purple .dot { background: #7c6af7; }
+  .cal-day.marked-yellow .dot { background: #f7c26a; }
+  .cal-day.marked-red .dot    { background: #f76a6a; }
+  .cal-day.cal-selected {
+    outline: 2px solid var(--accent) !important;
+    outline-offset: -2px;
+    background: rgba(124,106,247,0.2) !important;
+    color: var(--accent) !important;
+    font-weight: 700;
+  }
+
+  /* ── TAGS ── */
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    background: rgba(124,106,247,0.12);
+    color: var(--accent);
+    margin: 2px;
+  }
+  .tag.green { background: rgba(94,216,164,0.12); color: var(--accent2); }
+  .tag.red { background: rgba(247,106,106,0.12); color: var(--accent3); }
+  .tag.yellow { background: rgba(247,194,106,0.12); color: var(--accent4); }
+
+  /* ── SCORE BAR ── */
+  .score-bar-wrap { display: flex; align-items: center; gap: 10px; }
+  .score-bar { flex: 1; height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+  .score-bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+
+  /* ── CHECK TOGGLE ── */
+  .check-toggle {
+    width: 26px; height: 26px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 12px; transition: all 0.15s;
+    background: var(--surface2);
+  }
+  .check-toggle.on { border-color: var(--accent2); background: rgba(94,216,164,0.12); color: var(--accent2); }
+
+  /* ── CHART CONTAINER ── */
+  .chart-box { position: relative; height: 200px; }
+  /* ── CAL DETAIL PANEL ── */
+  .cal-detail {
+    margin-top: 12px; padding: 10px 12px;
+    background: var(--surface2); border-radius: 8px;
+    border-left: 3px solid var(--accent);
+    font-size: 12px; display: flex; flex-direction: column; gap: 5px;
+  }
+  .cal-detail-date { font-weight: 600; color: var(--text-muted); margin-bottom: 2px; }
+  .cal-detail-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .cal-detail-badge {
+    padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500;
+  }
+  .cal-detail-badge.yes { background: rgba(94,216,164,0.15); color: var(--accent2); border: 1px solid rgba(94,216,164,0.3); }
+  .cal-detail-badge.no  { background: rgba(113,113,122,0.15); color: var(--text-muted); border: 1px solid var(--border); }
+  .cal-detail-badge.red { background: rgba(247,106,106,0.15); color: var(--accent3); border: 1px solid rgba(247,106,106,0.3); }
+  .cal-detail-empty { color: var(--text-muted); font-size: 12px; margin-top: 10px; }
+  /* ── MINI CALENDAR (home) ── */
+  .mini-cal .cal-grid { gap: 2px; }
+  .mini-cal .cal-day { font-size: 10px; }
+  .mini-cal .cal-day-label { font-size: 10px; }
+  .cal-day.mini-skin { background: rgba(167,139,250,0.22); border-color: rgba(167,139,250,0.45); color: var(--text); }
+  .cal-day.mini-skin .dot { background: #a78bfa; }
+  .cal-day.mini-fast { background: rgba(94,216,164,0.18); border-color: rgba(94,216,164,0.4); color: var(--text); }
+  .cal-day.mini-fast .dot { background: var(--accent2); }
+
+  /* ── DIVIDER ── */
+  .divider { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
+
+  /* ── GRID 2COL ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 860px) {
+    .grid-2 { grid-template-columns: 1fr; }
+    .main { padding: 100px 16px 30px; }
+    .sidebar nav { flex-wrap: wrap; justify-content: flex-start; padding: 0 16px 10px; }
+  }
+
+  /* ── IMPORT ZONE ── */
+  .import-zone {
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    padding: 18px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-bottom: 12px;
+  }
+  .import-zone:hover { border-color: var(--accent); color: var(--text); }
+  .import-zone input[type="file"] { display: none; }
+
+  /* ── EYE LEGEND ── */
+  .eye-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
+  .eye-legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-muted); }
+  .eye-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* ── EMPTY STATE ── */
+  .empty-state { text-align: center; color: var(--text-muted); padding: 36px 20px; font-size: 13px; }
+
+  /* ── SUPPLEMENT CHIPS ── */
+  .supp-grid { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
+  .supp-chip {
+    padding: 5px 13px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.12s;
+    color: var(--text-muted);
+    background: var(--surface2);
+  }
+  .supp-chip.selected { background: rgba(124,106,247,0.12); border-color: rgba(124,106,247,0.4); color: var(--accent); }
+  .supp-add { display: flex; gap: 8px; margin-bottom: 12px; }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-logo">🏃 내 건강 <span>health dashboard</span></div>
+  <nav id="sidebarNav">
+    <div class="nav-item active" data-page="home" draggable="true" onclick="navigate('home')">
+      <span class="nav-icon">🏠</span> 홈 <span class="nav-drag-handle">⠿⠿</span>
+    </div>
+    <div class="nav-item" data-page="running" draggable="true" onclick="navigate('running')">
+      <span class="nav-icon">🏃</span> 러닝 기록 <span class="nav-drag-handle">⠿⠿</span>
+    </div>
+    <div class="nav-item" data-page="inbody" draggable="true" onclick="navigate('inbody')">
+      <span class="nav-icon">⚖️</span> 인바디 <span class="nav-drag-handle">⠿⠿</span>
+    </div>
+    <div class="nav-item" data-page="skin" draggable="true" onclick="navigate('skin')">
+      <span class="nav-icon">🧴</span> 피부 케어 <span class="nav-drag-handle">⠿⠿</span>
+    </div>
+    <div class="nav-item" data-page="supplement" draggable="true" onclick="navigate('supplement')">
+      <span class="nav-icon">💊</span> 영양제 <span class="nav-drag-handle">⠿⠿</span>
+    </div>
+    <div class="nav-item" data-page="condition" draggable="true" onclick="navigate('condition')">
+      <span class="nav-icon">📊</span> 컨디션 <span class="nav-drag-handle">⠿⠿</span>
+    </div>
+    <div class="nav-item" data-page="eye" draggable="true" onclick="navigate('eye')">
+      <span class="nav-icon">👁️</span> 눈 통증 <span class="nav-drag-handle">⠿⠿</span>
+    </div>
+    <div class="nav-item" data-page="fasting" draggable="true" onclick="navigate('fasting')">
+      <span class="nav-icon">🌙</span> 저녁 단식 <span class="nav-drag-handle">⠿⠿</span>
+    </div>
+    <div class="nav-item" data-page="sleep" draggable="true" onclick="navigate('sleep')">
+      <span class="nav-icon">🛌</span> 수면 <span class="nav-drag-handle">⠿⠿</span>
+    </div>
+    <div class="nav-item" data-page="analysis" draggable="true" onclick="navigate('analysis')">
+      <span class="nav-icon">🔬</span> 컨디션 분석 <span class="nav-drag-handle">⠿⠿</span>
+    </div>
+  </nav>
+  <div class="sidebar-date" id="sidebarDate"></div>
+</aside>
+
+<main class="main">
+
+<!-- ════════════════ HOME ════════════════ -->
+<div class="page active" id="page-home">
+  <div class="page-header">
+    <h1>오늘의 요약</h1>
+    <p id="homeDate"></p>
+  </div>
+
+  <div class="stats-row" id="homeStats"></div>
+
+  <div class="home-grid" id="homeGrid">
+    <div class="home-card-wrap" data-key="checklist" draggable="true">
+      <div class="card" style="height:100%">
+        <div class="card-title">오늘 체크리스트 <span class="home-drag-handle">⠿⠿</span></div>
+        <div id="todayChecklist"></div>
+      </div>
+    </div>
+    <div class="home-card-wrap" data-key="recentRun" draggable="true">
+      <div class="card" style="height:100%">
+        <div class="card-title">최근 러닝 <span class="home-drag-handle">⠿⠿</span></div>
+        <div id="recentRun"></div>
+      </div>
+    </div>
+    <div class="home-card-wrap" data-key="condChart" draggable="true">
+      <div class="card" style="height:100%">
+        <div class="card-title">컨디션 트렌드 (최근 14일) <span class="home-drag-handle">⠿⠿</span></div>
+        <div class="chart-box"><canvas id="conditionChart"></canvas></div>
+      </div>
+    </div>
+    <div class="home-card-wrap" data-key="runChart" draggable="true">
+      <div class="card" style="height:100%">
+        <div class="card-title">러닝 거리 트렌드 (최근 10회) <span class="home-drag-handle">⠿⠿</span></div>
+        <div class="chart-box"><canvas id="runChart"></canvas></div>
+      </div>
+    </div>
+    <div class="home-card-wrap" data-key="inbodyChart" draggable="true">
+      <div class="card" style="height:100%">
+        <div class="card-title">인바디 트렌드 (최근 10회) <span class="home-drag-handle">⠿⠿</span></div>
+        <div class="chart-box"><canvas id="homeInbodyChart"></canvas></div>
+      </div>
+    </div>
+    <div class="home-card-wrap" data-key="suppChart" draggable="true">
+      <div class="card" style="height:100%">
+        <div class="card-title">영양제 섭취 (최근 14일) <span class="home-drag-handle">⠿⠿</span></div>
+        <div class="chart-box"><canvas id="homeSuppChart"></canvas></div>
+      </div>
+    </div>
+    <div class="home-card-wrap" data-key="fastChart" draggable="true">
+      <div class="card" style="height:100%">
+        <div class="card-title">단식 현황 <span class="home-drag-handle">⠿⠿</span></div>
+        <div id="homeFastCal" class="mini-cal"></div>
+      </div>
+    </div>
+    <div class="home-card-wrap" data-key="eyeChart" draggable="true">
+      <div class="card" style="height:100%">
+        <div class="card-title">눈 상태 (최근 14일) <span class="home-drag-handle">⠿⠿</span></div>
+        <div class="chart-box"><canvas id="homeEyeChart"></canvas></div>
+      </div>
+    </div>
+    <div class="home-card-wrap" data-key="skinChart" draggable="true">
+      <div class="card" style="height:100%">
+        <div class="card-title">피부케어 마스크팩 <span class="home-drag-handle">⠿⠿</span></div>
+        <div id="homeSkinCal" class="mini-cal"></div>
+      </div>
+    </div>
+    <div class="home-card-wrap" data-key="mChart" draggable="true">
+      <div class="card" style="height:100%">
+        <div class="card-title">M / m 현황 (최근 14일) <span class="home-drag-handle">⠿⠿</span></div>
+        <div class="chart-box"><canvas id="homeMChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ RUNNING ════════════════ -->
+<div class="page" id="page-running">
+  <div class="page-header">
+    <h1>🏃 러닝 트레이닝</h1>
+    <p>과학적 훈련 관리로 목표 레이스를 완주하세요</p>
+  </div>
+
+  <!-- 목표 & 코치 -->
+  <div class="grid-2" style="margin-bottom:16px">
+    <div class="card">
+      <div class="card-title">🎯 레이스 목표 설정</div>
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <div id="goalHalf" class="supp-chip" onclick="setRaceGoal('half')" style="flex:1;text-align:center;padding:10px;font-size:13px">🏃 하프마라톤</div>
+        <div id="goalFull" class="supp-chip" onclick="setRaceGoal('full')" style="flex:1;text-align:center;padding:10px;font-size:13px">🏆 풀마라톤</div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+        <div class="form-group" style="flex:1;min-width:110px">
+          <label>목표 완주 시간</label>
+          <input type="text" id="goalTime" placeholder="1:45:00" oninput="saveRunnerGoal()">
+        </div>
+        <div class="form-group" style="flex:1;min-width:120px">
+          <label>레이스 날짜</label>
+          <input type="date" id="goalDate" onchange="saveRunnerGoal()">
+        </div>
+        <div class="form-group" style="flex:0;min-width:90px">
+          <label>최대 심박</label>
+          <input type="number" id="maxHRInput" placeholder="190" min="140" max="220" oninput="saveRunnerGoal()">
+        </div>
+      </div>
+      <div id="goalSummary"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">🧑‍🏫 코치 어드바이스</div>
+      <div id="coachAdvice" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+  </div>
+
+  <!-- 존 분포 & 주간 볼륨 -->
+  <div class="grid-2" style="margin-bottom:16px">
+    <div class="card">
+      <div class="card-title">❤️ 훈련 존 분포 <span style="font-size:11px;color:var(--text-muted);font-weight:400">최근 4주</span></div>
+      <div id="zoneLegend" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
+      <div style="display:flex;gap:16px;align-items:center">
+        <div style="position:relative;width:130px;height:130px;flex-shrink:0"><canvas id="runZoneChart"></canvas></div>
+        <div id="zoneStats" style="flex:1;font-size:12px;line-height:1.8"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">📅 주간 볼륨 <span style="font-size:11px;color:var(--text-muted);font-weight:400">최근 12주</span></div>
+      <div class="chart-box" style="height:160px"><canvas id="runWeeklyChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- 입력 -->
+  <div class="grid-2" style="margin-bottom:16px">
+    <div class="card">
+      <div class="card-title">Garmin CSV 가져오기</div>
+      <label class="import-zone" for="garminFile" style="margin-bottom:0">
+        📂 Garmin Connect → 활동 → 내보내기(CSV) → 업로드
+        <input type="file" id="garminFile" accept=".csv" onchange="importGarminCSV(event)">
+      </label>
+    </div>
+    <div class="card">
+      <div class="card-title">직접 입력</div>
+      <div style="margin-bottom:10px">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;font-weight:600">훈련 유형</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap" id="runTypePicker">
+          <div class="supp-chip run-type-chip" data-type="recovery"  onclick="selectRunType(this)" style="font-size:11px;padding:4px 10px;border-left:3px solid #8892b0">Z1 회복</div>
+          <div class="supp-chip run-type-chip" data-type="easy"      onclick="selectRunType(this)" style="font-size:11px;padding:4px 10px;border-left:3px solid #5ed8a4">Z2 쉬운달리기</div>
+          <div class="supp-chip run-type-chip" data-type="moderate"  onclick="selectRunType(this)" style="font-size:11px;padding:4px 10px;border-left:3px solid #f7c26a">Z3 중강도</div>
+          <div class="supp-chip run-type-chip" data-type="tempo"     onclick="selectRunType(this)" style="font-size:11px;padding:4px 10px;border-left:3px solid #f7a26a">Z4 템포</div>
+          <div class="supp-chip run-type-chip" data-type="interval"  onclick="selectRunType(this)" style="font-size:11px;padding:4px 10px;border-left:3px solid #f76a6a">Z5 인터벌</div>
+          <div class="supp-chip run-type-chip" data-type="long"      onclick="selectRunType(this)" style="font-size:11px;padding:4px 10px;border-left:3px solid #7c6af7">롱런</div>
+          <div class="supp-chip run-type-chip" data-type="race"      onclick="selectRunType(this)" style="font-size:11px;padding:4px 10px;border-left:3px solid #ffd700">🏁 레이스</div>
+        </div>
+      </div>
+      <div class="form-row" style="flex-wrap:wrap;gap:8px">
+        <div class="form-group" style="flex:0;min-width:120px"><label>날짜</label><input type="date" id="runDate"></div>
+        <div class="form-group" style="flex:0;min-width:70px"><label>거리 (km)</label><input type="number" id="runDist" placeholder="5.0" step="0.01" min="0"></div>
+        <div class="form-group" style="flex:0;min-width:80px"><label>시간</label><input type="text" id="runTime" placeholder="30:00"></div>
+        <div class="form-group" style="flex:0;min-width:70px"><label>평균 HR</label><input type="number" id="runHR" placeholder="150" min="0"></div>
+        <div class="form-group" style="flex:1;min-width:80px"><label>메모</label><input type="text" id="runMemo" placeholder="코스, 느낌..."></div>
+        <div class="form-group" style="flex:0"><label>&nbsp;</label><button class="btn btn-primary" onclick="addRun()">추가</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 스탯 & 페이스 트렌드 -->
+  <div class="stats-row" id="runStats" style="margin-bottom:16px"></div>
+  <div class="card" style="margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+      <div class="card-title" style="margin:0">📈 페이스 트렌드 <span style="font-size:11px;color:var(--text-muted);font-weight:400">(낮을수록 성장)</span></div>
+      <div id="runPR" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+    </div>
+    <div class="chart-box" style="height:180px"><canvas id="runPaceChart"></canvas></div>
+  </div>
+
+  <!-- 기록 테이블 -->
+  <div class="card">
+    <div class="card-title">전체 기록</div>
+    <div class="chart-box" style="height:140px;margin-bottom:14px"><canvas id="runPageChart"></canvas></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>날짜</th><th>유형</th><th>거리</th><th>시간</th><th>페이스</th><th>HR</th><th>존</th><th>메모</th><th></th></tr></thead>
+        <tbody id="runTable"></tbody>
+      </table>
+      <div class="empty-state" id="runEmpty">아직 기록이 없어요. 첫 러닝을 추가해보세요! 🏃</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ INBODY ════════════════ -->
+<div class="page" id="page-inbody">
+  <div class="page-header">
+    <h1>⚖️ 인바디 데이터</h1>
+    <p>인바디 측정 결과를 직접 입력하세요</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title">새 측정 기록</div>
+    <div class="form-row">
+      <div class="form-group"><label>날짜</label><input type="date" id="ibDate"></div>
+      <div class="form-group"><label>체중 (kg)</label><input type="number" id="ibWeight" placeholder="70.0" step="0.1"></div>
+      <div class="form-group"><label>체지방률 (%)</label><input type="number" id="ibFat" placeholder="20.0" step="0.1"></div>
+      <div class="form-group"><label>골격근량 (kg)</label><input type="number" id="ibMuscle" placeholder="32.0" step="0.1"></div>
+      <div class="form-group"><label>BMI</label><input type="number" id="ibBMI" placeholder="22.5" step="0.1"></div>
+      <div class="form-group"><label>기초대사량</label><input type="number" id="ibBMR" placeholder="1600"></div>
+      <div class="form-group" style="flex:0"><label>&nbsp;</label>
+        <button class="btn btn-primary" onclick="addInbody()">추가</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">추세</div>
+    <div class="grid-2">
+      <div class="chart-box"><canvas id="ibWeightChart"></canvas></div>
+      <div class="chart-box"><canvas id="ibFatChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">인바디 기록</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>날짜</th><th>체중</th><th>체지방률</th><th>골격근량</th><th>BMI</th><th>기초대사량</th><th></th></tr>
+        </thead>
+        <tbody id="ibTable"></tbody>
+      </table>
+      <div class="empty-state" id="ibEmpty">인바디 측정 결과를 입력해보세요 ⚖️</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ SKIN ════════════════ -->
+<div class="page" id="page-skin">
+  <div class="page-header">
+    <h1>🧴 피부 케어</h1>
+    <p>마스크팩 및 피부 상태 기록</p>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">오늘 기록</div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>날짜</label>
+        <input type="date" id="skinDate">
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <label style="font-size:14px">마스크팩 했나요?</label>
+        <div class="check-toggle" id="maskToggle" onclick="toggleMask()">✓</div>
+        <span id="maskLabel" style="font-size:13px;color:var(--text-muted)">안 함</span>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>피부 상태</label>
+        <select id="skinStatus">
+          <option value="">선택</option>
+          <option value="매우좋음">😊 매우 좋음</option>
+          <option value="좋음">🙂 좋음</option>
+          <option value="보통">😐 보통</option>
+          <option value="나쁨">😟 나쁨</option>
+          <option value="매우나쁨">😣 매우 나쁨</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>메모 (트러블, 특이사항 등)</label>
+        <textarea id="skinMemo" placeholder="오늘 피부 상태를 기록하세요..."></textarea>
+      </div>
+      <button class="btn btn-primary" style="width:100%" onclick="addSkin()">저장</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">이번 달 달력</div>
+      <div class="eye-legend">
+        <div class="eye-legend-item">
+          <div class="eye-dot" style="background:var(--accent2)"></div> 마스크팩
+        </div>
+        <div class="eye-legend-item">
+          <div class="eye-dot" style="background:var(--accent)"></div> 기록 있음
+        </div>
+      </div>
+      <div class="cal-header">
+        <button class="btn btn-outline" onclick="skinCalPrev()">◀</button>
+        <span id="skinCalTitle" style="font-weight:600"></span>
+        <button class="btn btn-outline" onclick="skinCalNext()">▶</button>
+      </div>
+      <div id="skinCal"></div>
+      <div id="skinCalDetail"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">피부 케어 기록</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>날짜</th><th>마스크팩</th><th>피부상태</th><th>메모</th><th></th></tr></thead>
+        <tbody id="skinTable"></tbody>
+      </table>
+      <div class="empty-state" id="skinEmpty">피부 케어 기록을 시작해보세요 🧴</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ SUPPLEMENT ════════════════ -->
+<div class="page" id="page-supplement">
+  <div class="page-header">
+    <h1>💊 영양제 기록</h1>
+    <p>오늘 섭취한 영양제를 체크하세요</p>
+  </div>
+
+  <div class="grid-2">
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="card">
+        <div class="card-title">내 영양제 목록 관리</div>
+        <div class="supp-add">
+          <input type="text" id="newSupp" placeholder="새 영양제 이름 입력">
+          <button class="btn btn-primary" onclick="addSuppType()">추가</button>
+        </div>
+        <div class="supp-grid" id="suppTypeList"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">오늘 섭취 기록</div>
+        <div class="form-group" style="margin-bottom:12px">
+          <label>날짜</label>
+          <input type="date" id="suppDate">
+        </div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:8px">섭취한 영양제를 선택하세요</p>
+        <div class="supp-grid" id="suppSelector"></div>
+        <div class="form-group" style="margin-top:14px;margin-bottom:14px">
+          <label>메모</label>
+          <input type="text" id="suppMemo" placeholder="특이사항...">
+        </div>
+        <button class="btn btn-primary" style="width:100%" onclick="saveSuppRecord()">저장</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">섭취 달력</div>
+      <div class="cal-header">
+        <button class="btn btn-outline" onclick="suppCalPrev()">◀</button>
+        <span id="suppCalTitle" style="font-weight:600;font-size:14px"></span>
+        <button class="btn btn-outline" onclick="suppCalNext()">▶</button>
+      </div>
+      <div id="suppCal"></div>
+      <div id="suppCalDetail" style="margin-top:14px;min-height:32px"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">영양제 섭취 기록</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>날짜</th><th>섭취 영양제</th><th>메모</th><th></th></tr></thead>
+        <tbody id="suppTable"></tbody>
+      </table>
+      <div class="empty-state" id="suppEmpty">영양제 목록을 추가하고 섭취를 기록해보세요 💊</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ CONDITION ════════════════ -->
+<div class="page" id="page-condition">
+  <div class="page-header">
+    <h1>📊 데일리 컨디션</h1>
+    <p>매일 컨디션 점수를 기록해 트렌드를 확인하세요</p>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">오늘 컨디션</div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>날짜</label>
+        <input type="date" id="condDate">
+      </div>
+      <div style="margin-bottom:18px">
+        <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:10px">컨디션 점수: <span id="condScoreDisplay" style="color:var(--accent);font-weight:700;font-size:18px">3</span>/5</label>
+        <input type="range" id="condScore" min="1" max="5" value="3"
+          oninput="document.getElementById('condScoreDisplay').textContent=this.value;updateScoreColor(this.value)"
+          style="width:100%;accent-color:var(--accent)">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-top:4px">
+          <span>😣 매우나쁨</span><span>😟 나쁨</span><span>😐 보통</span><span>😊 좋음</span><span>🤩 매우좋음</span>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>컨디션 태그</label>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px" id="condTags">
+          <div class="supp-chip" onclick="toggleCondTag(this)">😴 수면부족</div>
+          <div class="supp-chip" onclick="toggleCondTag(this)">💪 에너지충만</div>
+          <div class="supp-chip" onclick="toggleCondTag(this)">🤧 감기기운</div>
+          <div class="supp-chip" onclick="toggleCondTag(this)">😤 스트레스</div>
+          <div class="supp-chip" onclick="toggleCondTag(this)">🧘 릴렉스</div>
+          <div class="supp-chip" onclick="toggleCondTag(this)">🤕 두통</div>
+          <div class="supp-chip" onclick="toggleCondTag(this)">😊 기분좋음</div>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>M / m / 술</label>
+        <div style="display:flex;gap:10px;margin-top:6px">
+          <div id="condMBig" onclick="this.classList.toggle('selected')"
+            class="supp-chip" style="font-size:15px;font-weight:700;letter-spacing:1px;min-width:52px;text-align:center">M</div>
+          <div id="condMSmall" onclick="this.classList.toggle('selected')"
+            class="supp-chip" style="font-size:15px;font-weight:700;letter-spacing:1px;min-width:52px;text-align:center">m</div>
+          <div id="condAlcohol" onclick="this.classList.toggle('selected')"
+            class="supp-chip" style="font-size:15px;font-weight:700;letter-spacing:1px;min-width:52px;text-align:center">🍺</div>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>메모</label>
+        <textarea id="condMemo" placeholder="오늘 몸 상태를 자유롭게..."></textarea>
+      </div>
+      <button class="btn btn-primary" style="width:100%" onclick="saveCondition()">저장</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">컨디션 달력</div>
+      <div class="cal-header">
+        <button class="btn btn-outline" onclick="condCalPrev()">◀</button>
+        <span id="condCalTitle" style="font-weight:600"></span>
+        <button class="btn btn-outline" onclick="condCalNext()">▶</button>
+      </div>
+      <div id="condCal"></div>
+      <div id="condCalDetail"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">컨디션 트렌드</div>
+    <div class="chart-box" style="height:200px"><canvas id="condPageChart"></canvas></div>
+    <hr class="divider">
+    <div id="condAvgStats" style="display:flex;gap:20px;flex-wrap:wrap"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">컨디션 기록</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>날짜</th><th>점수</th><th>M/m/술</th><th>태그</th><th>메모</th><th></th></tr></thead>
+        <tbody id="condTable"></tbody>
+      </table>
+      <div class="empty-state" id="condEmpty">매일 컨디션을 기록해보세요 📊</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ EYE ════════════════ -->
+<div class="page" id="page-eye">
+  <div class="page-header">
+    <h1>👁️ 눈 통증 트랙커</h1>
+    <p>눈 통증 및 안약 기록</p>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">오늘 기록</div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>날짜</label>
+        <input type="date" id="eyeDate">
+      </div>
+      <div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap">
+        <div>
+          <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:6px">눈 통증</label>
+          <div style="display:flex;gap:8px">
+            <div class="check-toggle" id="eyePainToggle" onclick="toggleEyePain()">✗</div>
+            <span id="eyePainLabel" style="font-size:13px;color:var(--text-muted);line-height:28px">통증 없음</span>
+          </div>
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:6px">안약 넣음</label>
+          <div style="display:flex;gap:8px">
+            <div class="check-toggle" id="eyeDropToggle" onclick="toggleEyeDrop()">✗</div>
+            <span id="eyeDropLabel" style="font-size:13px;color:var(--text-muted);line-height:28px">안 넣음</span>
+          </div>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>통증 강도 (0=없음)</label>
+        <select id="eyePainLevel">
+          <option value="0">0 - 없음</option>
+          <option value="1">1 - 아주 약함</option>
+          <option value="2">2 - 약함</option>
+          <option value="3">3 - 보통</option>
+          <option value="4">4 - 강함</option>
+          <option value="5">5 - 매우 강함</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>메모 (증상, 안약 종류 등)</label>
+        <textarea id="eyeMemo" placeholder="충혈, 건조함, 이물감..."></textarea>
+      </div>
+      <button class="btn btn-primary" style="width:100%" onclick="saveEye()">저장</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">이번 달 달력</div>
+      <div class="eye-legend">
+        <div class="eye-legend-item">
+          <div class="eye-dot" style="background:var(--accent3)"></div> 통증 있음
+        </div>
+        <div class="eye-legend-item">
+          <div class="eye-dot" style="background:var(--accent2)"></div> 안약
+        </div>
+        <div class="eye-legend-item">
+          <div class="eye-dot" style="background:var(--accent)"></div> 둘 다
+        </div>
+      </div>
+      <div class="cal-header">
+        <button class="btn btn-outline" onclick="eyeCalPrev()">◀</button>
+        <span id="eyeCalTitle" style="font-weight:600"></span>
+        <button class="btn btn-outline" onclick="eyeCalNext()">▶</button>
+      </div>
+      <div id="eyeCal"></div>
+      <div id="eyeCalDetail"></div>
+
+      <hr class="divider">
+      <div id="eyeStats" style="display:flex;gap:16px;flex-wrap:wrap"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">눈 통증 기록</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>날짜</th><th>통증</th><th>강도</th><th>안약</th><th>메모</th><th></th></tr></thead>
+        <tbody id="eyeTable"></tbody>
+      </table>
+      <div class="empty-state" id="eyeEmpty">눈 상태를 기록해보세요 👁️</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ FASTING ════════════════ -->
+<div class="page" id="page-fasting">
+  <div class="page-header">
+    <h1>🌙 저녁 단식</h1>
+    <p>날짜를 클릭해서 단식 여부를 기록하세요</p>
+  </div>
+
+  <div id="fastStats" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px"></div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <div class="card-title" style="margin-bottom:0">단식 달력</div>
+      <div class="eye-legend" style="margin:0">
+        <div class="eye-legend-item"><div class="eye-dot" style="background:var(--accent2)"></div> 단식함 🌙</div>
+        <div class="eye-legend-item"><div class="eye-dot" style="background:var(--accent3)"></div> 단식안함 ✗</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-left:6px">클릭: 비어있음 → 단식안함 → 단식함 → 삭제</div>
+      </div>
+    </div>
+    <div class="cal-header">
+      <button class="btn btn-outline" onclick="fastCalPrev()">◀</button>
+      <span id="fastCalTitle" style="font-weight:600"></span>
+      <button class="btn btn-outline" onclick="fastCalNext()">▶</button>
+    </div>
+    <div id="fastCal"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">단식 기록</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>날짜</th><th>단식여부</th><th></th></tr></thead>
+        <tbody id="fastTable"></tbody>
+      </table>
+      <div class="empty-state" id="fastEmpty">저녁 단식 기록을 시작해보세요 🌙</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ SLEEP ════════════════ -->
+<div class="page" id="page-sleep">
+  <div class="page-header">
+    <h1>🛌 수면 분석</h1>
+    <p>Garmin Connect 수면 데이터 기반 분석</p>
+  </div>
+
+  <div class="stats-row" id="sleepStats"></div>
+
+  <div class="grid-2" style="margin-bottom:16px">
+    <div class="card">
+      <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+        <span>수면 달력</span>
+        <span>
+          <button onclick="sleepCalState.month--;if(sleepCalState.month<0){sleepCalState.month=11;sleepCalState.year--}renderSleepCal()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;padding:0 4px">◀</button>
+          <span id="sleepCalTitle" style="font-size:12px;color:var(--text-muted);min-width:70px;display:inline-block;text-align:center"></span>
+          <button onclick="sleepCalState.month++;if(sleepCalState.month>11){sleepCalState.month=0;sleepCalState.year++}renderSleepCal()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;padding:0 4px">▶</button>
+        </span>
+      </div>
+      <div style="display:flex;gap:10px;font-size:10px;color:var(--text-muted);margin-bottom:8px;flex-wrap:wrap">
+        <span>🟢 우수(≥85)</span><span>🟣 좋음(≥75)</span><span>🟡 보통(≥65)</span><span>🔴 낮음(&lt;65)</span>
+      </div>
+      <div id="sleepCal"></div>
+      <div id="sleepCalDetail"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">수면 점수 트렌드 (최근 30일)</div>
+      <div class="chart-box"><canvas id="sleepScoreChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid-2" style="margin-bottom:16px">
+    <div class="card">
+      <div class="card-title">수면 시간 vs 필요 수면 (최근 30일)</div>
+      <div class="chart-box"><canvas id="sleepDurChart"></canvas></div>
+    </div>
+    <div class="card" id="sleepQualCard"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">수면 기록 (최근 30일)</div>
+    <div id="sleepTable"></div>
+  </div>
+</div>
+
+<!-- ════════════════ ANALYSIS ════════════════ -->
+<div class="page" id="page-analysis">
+  <div class="page-header">
+    <h1>🔬 컨디션 분석</h1>
+    <p>당일 · D-1 · D2~3 · D7 시간창별 요인 분석</p>
+  </div>
+
+  <!-- 요약 + 트렌드 -->
+  <div class="grid-2" style="margin-bottom:16px">
+    <div class="card" id="analysisSummary"></div>
+    <div class="card">
+      <div class="card-title">컨디션 트렌드</div>
+      <div class="chart-box"><canvas id="analysisTrendChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- [HERO] 시간창별 요인 분석 -->
+  <div class="card" style="margin-bottom:16px" id="analysisMultiWindow"></div>
+
+  <!-- 인사이트 -->
+  <div class="card" style="margin-bottom:16px" id="analysisInsights"></div>
+
+  <!-- 분포 + M/m -->
+  <div class="grid-2" style="margin-bottom:16px">
+    <div class="card">
+      <div class="card-title">컨디션 점수 분포</div>
+      <div class="chart-box"><canvas id="analysisDist"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">M / m → 컨디션 관계</div>
+      <div class="chart-box"><canvas id="analysisMChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- 수면 × 컨디션 -->
+  <div class="card">
+    <div class="card-title">🛌 수면 × 컨디션 상세</div>
+    <div id="analysisSleep"></div>
+  </div>
+</div>
+
+</main>
+
+<script>
+// ═══════════════════════════════════
+// DATA STORE (localStorage)
+// ═══════════════════════════════════
+const DB = {
+  get(key) { try { return JSON.parse(localStorage.getItem(key)) || []; } catch { return []; } },
+  set(key, val) { localStorage.setItem(key, JSON.stringify(val)); },
+  getObj(key, def={}) { try { return JSON.parse(localStorage.getItem(key)) || def; } catch { return def; } },
+  setObj(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+};
+
+// ═══════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════
+let currentPage = 'home';
+function navigate(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  document.querySelector(`[data-page="${page}"]`).classList.add('active');
+  currentPage = page;
+  renderPage(page);
+}
+
+function renderPage(page) {
+  if (page === 'home') renderHome();
+  if (page === 'running') renderRunning();
+  if (page === 'inbody') renderInbody();
+  if (page === 'skin') renderSkin();
+  if (page === 'supplement') renderSupp();
+  if (page === 'condition') renderCondition();
+  if (page === 'eye') renderEye();
+  if (page === 'fasting') renderFasting();
+  if (page === 'sleep') renderSleep();
+  if (page === 'analysis') renderAnalysis();
+}
+
+// ═══════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════
+function today() { return new Date().toISOString().split('T')[0]; }
+function fmtDate(d) {
+  const dt = new Date(d + 'T00:00:00');
+  return `${dt.getMonth()+1}/${dt.getDate()}`;
+}
+function fmtDateLong(d) {
+  const dt = new Date(d + 'T00:00:00');
+  return `${dt.getFullYear()}년 ${dt.getMonth()+1}월 ${dt.getDate()}일`;
+}
+function timeToSecs(timeStr) {
+  if (!timeStr) return null;
+  const p = timeStr.split(':').map(Number);
+  if (p.length === 3) return p[0]*3600 + p[1]*60 + p[2];
+  if (p.length === 2) return p[0]*60 + p[1];
+  return null;
+}
+function calcPaceSecs(dist, timeStr) {
+  const d = parseFloat(dist), s = timeToSecs(timeStr);
+  return (d && s) ? s / d : null;
+}
+function fmtPace(secPerKm) {
+  if (!secPerKm) return '-';
+  const m = Math.floor(secPerKm / 60), s = Math.round(secPerKm % 60);
+  return `${m}:${String(s).padStart(2,'0')}/km`;
+}
+function getWeekKey(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const mon = new Date(d); mon.setDate(d.getDate() - ((d.getDay()+6)%7));
+  return mon.toISOString().slice(0,10);
+}
+
+function calcPace(dist, timeStr) {
+  if (!dist || !timeStr) return '-';
+  const parts = timeStr.split(':');
+  let secs = 0;
+  if (parts.length === 2) secs = parseInt(parts[0])*60 + parseInt(parts[1]);
+  else if (parts.length === 3) secs = parseInt(parts[0])*3600 + parseInt(parts[1])*60 + parseInt(parts[2]);
+  if (!secs || !dist) return '-';
+  const paceSec = secs / dist;
+  const m = Math.floor(paceSec / 60);
+  const s = Math.round(paceSec % 60);
+  return `${m}:${s.toString().padStart(2,'0')}/km`;
+}
+function scoreColor(s) {
+  if (s >= 5) return '#5ed8a4';
+  if (s >= 4) return '#7c6af7';
+  if (s >= 3) return '#f7c26a';
+  return '#f76a6a';
+}
+function sleepScoreColor(s) {
+  if (!s) return 'var(--text-muted)';
+  if (s >= 85) return '#5ed8a4';
+  if (s >= 75) return '#7c6af7';
+  if (s >= 65) return '#f7c26a';
+  return '#f76a6a';
+}
+function sleepMarkClass(s) {
+  if (!s) return '';
+  if (s >= 85) return 'marked';
+  if (s >= 75) return 'marked-purple';
+  if (s >= 65) return 'marked-yellow';
+  return 'marked-red';
+}
+function fmtDur(mins) {
+  if (!mins) return '-';
+  return `${Math.floor(mins/60)}h ${mins%60}m`;
+}
+
+// Calendar
+function renderCal(containerId, titleId, year, month, getMarkClass, selectedDate, onClickFn) {
+  const title = document.getElementById(titleId);
+  const container = document.getElementById(containerId);
+  title.textContent = `${year}년 ${month+1}월`;
+  const firstDow = new Date(year, month, 1).getDay(); // 0=일
+  const first = (firstDow + 6) % 7; // 월요일 기준 오프셋
+  const days = new Date(year, month+1, 0).getDate();
+  const todayStr = today();
+
+  let html = '<div class="cal-grid">';
+  ['월','화','수','목','금','토','일'].forEach(d => {
+    html += `<div class="cal-day-label">${d}</div>`;
+  });
+  for (let i = 0; i < first; i++) html += '<div class="cal-day empty"></div>';
+  for (let d = 1; d <= days; d++) {
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const mark = getMarkClass(dateStr);
+    const isToday = dateStr === todayStr ? 'today' : '';
+    const isSelected = dateStr === selectedDate ? 'cal-selected' : '';
+    const clickAttr = onClickFn ? `onclick="${onClickFn}('${dateStr}')" style="cursor:pointer"` : '';
+    html += `<div class="cal-day ${mark} ${isToday} ${isSelected}" ${clickAttr} title="${dateStr}">
+      ${d}<div class="dot"></div>
+    </div>`;
+  }
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+// ═══════════════════════════════════
+// HOME
+// ═══════════════════════════════════
+let homeCharts = {};
+function renderHome() {
+  const td = today();
+  document.getElementById('homeDate').textContent = fmtDateLong(td);
+  document.getElementById('sidebarDate').textContent = fmtDateLong(td);
+
+  const runs = DB.get('runs');
+  const conds = DB.get('conditions');
+  const fasts = DB.get('fastings');
+  const eyes = DB.get('eyes');
+  const skins = DB.get('skins');
+
+  // Stats
+  const totalKm = runs.reduce((s,r) => s + parseFloat(r.dist||0), 0);
+  const avgCond = conds.length ? (conds.reduce((s,c) => s+parseInt(c.score),0)/conds.length).toFixed(1) : '-';
+  const fastCount = fasts.filter(f => f.fasted).length;
+  const eyePainDays = eyes.filter(e => e.pain).length;
+
+  document.getElementById('homeStats').innerHTML = `
+    <div class="stat-chip"><div class="lbl">TOTAL DISTANCE</div><div class="val">${totalKm.toFixed(1)}<span style="font-size:16px;font-weight:500;color:var(--text-muted)"> km</span></div></div>
+    <div class="stat-chip"><div class="lbl">RUN COUNT</div><div class="val">${runs.length}<span style="font-size:16px;font-weight:500;color:var(--text-muted)"> 회</span></div></div>
+    <div class="stat-chip"><div class="lbl">AVG CONDITION</div><div class="val" style="color:${scoreColor(avgCond)}">${avgCond}<span style="font-size:16px;font-weight:500;color:var(--text-muted)"> /10</span></div></div>
+    <div class="stat-chip"><div class="lbl">FASTING DAYS</div><div class="val" style="color:var(--accent2)">${fastCount}<span style="font-size:16px;font-weight:500;color:var(--text-muted)"> 일</span></div></div>
+    <div class="stat-chip"><div class="lbl">EYE PAIN DAYS</div><div class="val" style="color:var(--accent3)">${eyePainDays}<span style="font-size:16px;font-weight:500;color:var(--text-muted)"> 일</span></div></div>
+  `;
+
+  // Today checklist
+  const todaySkin = skins.find(s => s.date === td);
+  const todayCond = conds.find(c => c.date === td);
+  const todayFast = fasts.find(f => f.date === td);
+  const todayEye = eyes.find(e => e.date === td);
+  const todaySupp = DB.get('suppRecords').find(s => s.date === td);
+
+  document.getElementById('todayChecklist').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px">
+      ${check('컨디션 기록', !!todayCond, 'condition')}
+      ${check('영양제 기록', !!todaySupp, 'supplement')}
+      ${check('저녁 단식 체크', !!todayFast, 'fasting')}
+      ${check('눈 상태 기록', !!todayEye, 'eye')}
+      ${check('피부 케어 기록', !!todaySkin, 'skin')}
+    </div>
+  `;
+
+  // Recent run
+  const lastRun = [...runs].sort((a,b) => b.date.localeCompare(a.date))[0];
+  document.getElementById('recentRun').innerHTML = lastRun
+    ? `<div style="font-size:13px;color:var(--text-muted);margin-bottom:8px">${fmtDateLong(lastRun.date)}</div>
+       <div style="font-size:28px;font-weight:700;color:var(--accent)">${lastRun.dist}<span style="font-size:14px">km</span></div>
+       <div style="color:var(--text-muted);font-size:14px;margin-top:4px">⏱ ${lastRun.time || '-'} · 페이스 ${calcPace(lastRun.dist, lastRun.time)}</div>`
+    : '<div class="empty-state" style="padding:20px">아직 러닝 기록이 없어요 🏃</div>';
+
+  // Charts
+  const condLast14 = [...conds].sort((a,b) => a.date.localeCompare(b.date)).slice(-14);
+  const runLast10 = [...runs].sort((a,b) => a.date.localeCompare(b.date)).slice(-10);
+
+  ['cond','run','inbody','supp','eye','mstat'].forEach(k => {
+    if (homeCharts[k]) { homeCharts[k].destroy(); homeCharts[k] = null; }
+  });
+
+  // ── 컨디션
+  const condCtx = document.getElementById('conditionChart').getContext('2d');
+  homeCharts.cond = new Chart(condCtx, {
+    type: 'line',
+    data: {
+      labels: condLast14.map(c => fmtDate(c.date)),
+      datasets: [{
+        data: condLast14.map(c => c.score),
+        borderColor: '#7c6af7',
+        backgroundColor: 'rgba(124,106,247,0.1)',
+        fill: true, tension: 0.4, pointRadius: 4,
+        pointBackgroundColor: condLast14.map(c => scoreColor(c.score))
+      }]
+    },
+    options: chartOpts(1, 5)
+  });
+
+  // ── 러닝
+  const runCtx = document.getElementById('runChart').getContext('2d');
+  homeCharts.run = new Chart(runCtx, {
+    type: 'bar',
+    data: {
+      labels: runLast10.map(r => fmtDate(r.date)),
+      datasets: [{
+        data: runLast10.map(r => r.dist),
+        backgroundColor: 'rgba(124,106,247,0.6)',
+        borderRadius: 6
+      }]
+    },
+    options: chartOpts(0)
+  });
+
+  // ── 최근 14일 날짜 배열 헬퍼
+  function last14() {
+    const arr = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      arr.push(d.toISOString().slice(0,10));
+    }
+    return arr;
+  }
+  const dates14 = last14();
+  const labels14 = dates14.map(d => fmtDate(d));
+
+  // ── 인바디
+  const inbodies = DB.get('inbody').sort((a,b) => a.date.localeCompare(b.date)).slice(-10);
+  const ibCtx = document.getElementById('homeInbodyChart').getContext('2d');
+  homeCharts.inbody = new Chart(ibCtx, {
+    type: 'line',
+    data: {
+      labels: inbodies.map(i => fmtDate(i.date)),
+      datasets: [
+        { label: '체중(kg)', data: inbodies.map(i => parseFloat(i.weight)||null),
+          borderColor: '#7c6af7', backgroundColor: 'rgba(124,106,247,0.08)',
+          fill: false, tension: 0.4, pointRadius: 4, yAxisID: 'y' },
+        { label: '근육(kg)', data: inbodies.map(i => parseFloat(i.muscle)||null),
+          borderColor: '#5ed8a4', backgroundColor: 'transparent',
+          fill: false, tension: 0.4, pointRadius: 4, yAxisID: 'y' },
+        { label: '체지방(%)', data: inbodies.map(i => parseFloat(i.fat)||null),
+          borderColor: '#f76a6a', backgroundColor: 'transparent',
+          fill: false, tension: 0.4, pointRadius: 4, yAxisID: 'y2' }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: true, labels: { color: '#8888aa', font: { size: 10 }, boxWidth: 12, padding: 8 } } },
+      scales: {
+        x: { grid: { color: '#2e2e40' }, ticks: { color: '#8888aa', font: { size: 10 } } },
+        y: { grid: { color: '#2e2e40' }, ticks: { color: '#8888aa', font: { size: 10 } }, position: 'left' },
+        y2: { grid: { display: false }, ticks: { color: '#f76a6a', font: { size: 10 } }, position: 'right' }
+      }
+    }
+  });
+
+  // ── 영양제 (하루에 먹은 종류 수)
+  const suppMap = {};
+  DB.get('suppRecords').forEach(r => { suppMap[r.date] = (r.list||[]).length; });
+  const suppCtx = document.getElementById('homeSuppChart').getContext('2d');
+  homeCharts.supp = new Chart(suppCtx, {
+    type: 'bar',
+    data: {
+      labels: labels14,
+      datasets: [{
+        label: '섭취 종류 수',
+        data: dates14.map(d => suppMap[d] || 0),
+        backgroundColor: dates14.map(d => suppMap[d] ? 'rgba(247,194,106,0.7)' : 'rgba(247,194,106,0.15)'),
+        borderRadius: 5
+      }]
+    },
+    options: { ...chartOpts(0), plugins: { legend: { display: false } } }
+  });
+
+  // ── 단식 미니 달력
+  const fastMapCal = {};
+  DB.get('fastings').forEach(r => { if (r.fasted) fastMapCal[r.date] = true; });
+  renderMiniHomeCal('homeFastCal', d => !!fastMapCal[d], 'mini-fast');
+
+  // ── 눈 상태
+  const eyeMap = {};
+  DB.get('eyes').forEach(r => { eyeMap[r.date] = r; });
+  const eyeCtx = document.getElementById('homeEyeChart').getContext('2d');
+  homeCharts.eye = new Chart(eyeCtx, {
+    type: 'bar',
+    data: {
+      labels: labels14,
+      datasets: [
+        { label: '통증', data: dates14.map(d => eyeMap[d]?.pain ? 1 : 0),
+          backgroundColor: 'rgba(247,106,106,0.7)', borderRadius: 4 },
+        { label: '안약', data: dates14.map(d => eyeMap[d]?.drop ? 1 : 0),
+          backgroundColor: 'rgba(247,194,106,0.7)', borderRadius: 4 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: true, labels: { color: '#8888aa', font: { size: 10 }, boxWidth: 10, padding: 6 } } },
+      scales: {
+        x: { grid: { color: '#2e2e40' }, ticks: { color: '#8888aa', font: { size: 10 } } },
+        y: { display: false, min: 0, max: 1 },
+        x: { stacked: false }
+      }
+    }
+  });
+
+  // ── 피부케어 미니 달력
+  const skinMapCal = {};
+  DB.get('skins').forEach(r => { if (r.mask) skinMapCal[r.date] = true; });
+  renderMiniHomeCal('homeSkinCal', d => !!skinMapCal[d], 'mini-skin');
+
+  // ── M / m 현황
+  const condMap = {};
+  DB.get('conditions').forEach(r => { condMap[r.date] = r; });
+  const mCtx = document.getElementById('homeMChart').getContext('2d');
+  homeCharts.mstat = new Chart(mCtx, {
+    type: 'bar',
+    data: {
+      labels: labels14,
+      datasets: [
+        { label: 'M', data: dates14.map(d => condMap[d]?.mBig ? 1 : 0),
+          backgroundColor: 'rgba(124,106,247,0.75)', borderRadius: 4 },
+        { label: 'm', data: dates14.map(d => condMap[d]?.mSmall ? 1 : 0),
+          backgroundColor: 'rgba(94,216,164,0.75)', borderRadius: 4 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: true, labels: { color: '#8888aa', font: { size: 10 }, boxWidth: 10, padding: 6 } } },
+      scales: {
+        x: { grid: { color: '#2e2e40' }, ticks: { color: '#8888aa', font: { size: 10 } } },
+        y: { display: false, min: 0, max: 1 }
+      }
+    }
+  });
+}
+
+function renderMiniHomeCal(containerId, highlightFn, markClass) {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const firstDow = new Date(year, month, 1).getDay();
+  const first = (firstDow + 6) % 7; // 월요일 기준
+  const days = new Date(year, month + 1, 0).getDate();
+  const todayStr = today();
+  let html = `<div style="text-align:center;font-size:12px;color:var(--text-muted);margin-bottom:8px;font-weight:500">${year}년 ${month+1}월</div>`;
+  html += '<div class="cal-grid">';
+  ['월','화','수','목','금','토','일'].forEach(d => {
+    html += `<div class="cal-day-label">${d}</div>`;
+  });
+  for (let i = 0; i < first; i++) html += '<div class="cal-day empty"></div>';
+  for (let d = 1; d <= days; d++) {
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isToday = dateStr === todayStr ? 'today' : '';
+    const mark = highlightFn(dateStr) ? markClass : '';
+    html += `<div class="cal-day ${mark} ${isToday}" title="${dateStr}">${d}<div class="dot"></div></div>`;
+  }
+  html += '</div>';
+  document.getElementById(containerId).innerHTML = html;
+}
+
+function check(label, done, page) {
+  return `<div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="navigate('${page}')">
+    <div style="width:20px;height:20px;border-radius:50%;border:2px solid ${done ? 'var(--accent2)' : 'var(--border)'};
+      background:${done ? 'rgba(94,216,164,0.2)' : 'transparent'};
+      display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--accent2)">
+      ${done ? '✓' : ''}
+    </div>
+    <span style="font-size:14px;color:${done ? 'var(--text)' : 'var(--text-muted)'};text-decoration:${done ? 'none' : 'none'}">${label}</span>
+    ${done ? '<span class="tag green" style="margin-left:auto;font-size:11px">완료</span>' : '<span style="margin-left:auto;font-size:11px;color:var(--text-muted)">→</span>'}
+  </div>`;
+}
+
+function chartOpts(min, max) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: '#2e2e40' }, ticks: { color: '#8888aa', font: { size: 11 } } },
+      y: { grid: { color: '#2e2e40' }, ticks: { color: '#8888aa', font: { size: 11 } }, min, max }
+    }
+  };
+}
+
+// ═══════════════════════════════════
+// RUNNING
+// ═══════════════════════════════════
+const ZONE_DEF = {
+  1: { label:'Z1 회복',     color:'#8892b0', pct:[0,60],  desc:'매우 쉬움 — 회복 및 준비운동' },
+  2: { label:'Z2 유산소',   color:'#5ed8a4', pct:[60,70], desc:'대화 가능 — 기초 유산소 베이스' },
+  3: { label:'Z3 중강도',   color:'#f7c26a', pct:[70,80], desc:'약간 힘듦 — 마라톤 레이스 페이스 구간' },
+  4: { label:'Z4 젖산역치', color:'#f7a26a', pct:[80,90], desc:'힘듦 — 10km 레이스 페이스' },
+  5: { label:'Z5 VO₂max',  color:'#f76a6a', pct:[90,100],desc:'매우 힘듦 — 최고 강도 인터벌' },
+};
+const RUN_TYPE_DEF = {
+  recovery: { label:'Z1 회복',    zone:1, color:'#8892b0' },
+  easy:     { label:'Z2 쉬운달리기', zone:2, color:'#5ed8a4' },
+  moderate: { label:'Z3 중강도',  zone:3, color:'#f7c26a' },
+  tempo:    { label:'Z4 템포',    zone:4, color:'#f7a26a' },
+  interval: { label:'Z5 인터벌', zone:5, color:'#f76a6a' },
+  long:     { label:'롱런',       zone:2, color:'#7c6af7' },
+  race:     { label:'🏁 레이스',  zone:4, color:'#ffd700' },
+};
+let runChart = null, runPaceChart = null, runWeeklyChart = null, runZoneChart = null;
+let selectedRunType = null;
+
+function getZoneFromHR(hr, maxHR) {
+  if (!hr || !maxHR) return null;
+  const p = hr / maxHR * 100;
+  return p < 60 ? 1 : p < 70 ? 2 : p < 80 ? 3 : p < 90 ? 4 : 5;
+}
+function getRunZone(r, maxHR) {
+  if (r.hr && maxHR) return getZoneFromHR(parseInt(r.hr), maxHR);
+  if (r.runType && RUN_TYPE_DEF[r.runType]) return RUN_TYPE_DEF[r.runType].zone;
+  return null;
+}
+function zoneBadge(z) {
+  if (!z) return '<span style="color:var(--text-muted);font-size:11px">-</span>';
+  const d = ZONE_DEF[z];
+  return `<span style="font-size:11px;padding:2px 7px;border-radius:4px;background:${d.color}22;color:${d.color};border:1px solid ${d.color}44;font-weight:600">${d.label}</span>`;
+}
+function runTypeBadge(type) {
+  if (!type || !RUN_TYPE_DEF[type]) return '<span style="color:var(--text-muted);font-size:11px">-</span>';
+  const d = RUN_TYPE_DEF[type];
+  return `<span style="font-size:11px;padding:2px 7px;border-radius:4px;background:${d.color}22;color:${d.color};border:1px solid ${d.color}44">${d.label}</span>`;
+}
+function goalPaceSecs(timeStr, distKm) {
+  const s = timeToSecs(timeStr); return (s && distKm) ? s / distKm : null;
+}
+
+function selectRunType(el) {
+  const type = el.dataset.type;
+  document.querySelectorAll('.run-type-chip').forEach(c => c.classList.remove('selected'));
+  selectedRunType = (selectedRunType === type) ? null : type;
+  if (selectedRunType) el.classList.add('selected');
+}
+
+function setRaceGoal(type) {
+  const g = DB.getObj('runnerGoal', {}); g.race = type; DB.setObj('runnerGoal', g);
+  document.getElementById('goalHalf').classList.toggle('selected', type==='half');
+  document.getElementById('goalFull').classList.toggle('selected', type==='full');
+  renderRunning();
+}
+function saveRunnerGoal() {
+  const g = DB.getObj('runnerGoal', {});
+  g.time  = document.getElementById('goalTime').value;
+  g.date  = document.getElementById('goalDate').value;
+  g.maxHR = parseInt(document.getElementById('maxHRInput').value) || 190;
+  DB.setObj('runnerGoal', g);
+  renderRunning();
+}
+function loadRunnerGoal() {
+  const g = DB.getObj('runnerGoal', { race:'half' });
+  document.getElementById('goalHalf').classList.toggle('selected', g.race==='half');
+  document.getElementById('goalFull').classList.toggle('selected', g.race==='full');
+  if (g.time)  document.getElementById('goalTime').value  = g.time;
+  if (g.date)  document.getElementById('goalDate').value  = g.date;
+  if (g.maxHR) document.getElementById('maxHRInput').value = g.maxHR;
+  return g;
+}
+
+function generateCoachAdvice(runs, goal, maxHR) {
+  const now = new Date();
+  const daysSince = d => (now - new Date(d+'T00:00:00')) / 86400000;
+  const last4w = runs.filter(r => daysSince(r.date) <= 28);
+  const weeklyKm = last4w.reduce((s,r)=>s+parseFloat(r.dist||0),0) / 4;
+  const DIST = { half:21.0975, full:42.195 };
+  const raceKm = DIST[goal.race] || DIST.half;
+
+  // Zone distribution
+  const zc = {1:0,2:0,3:0,4:0,5:0}; let zt = 0;
+  last4w.forEach(r => { const z=getRunZone(r,maxHR); if(z){zc[z]++;zt++;} });
+  const easyPct  = zt ? (zc[1]+zc[2])/zt*100 : -1;
+  const hardPct  = zt ? (zc[4]+zc[5])/zt*100 : 0;
+  const grayPct  = zt ? zc[3]/zt*100 : 0;
+  const weeksToRace = goal.date ? Math.max(0,Math.floor((new Date(goal.date)-now)/604800000)) : null;
+  const sorted = [...runs].sort((a,b)=>a.date.localeCompare(b.date));
+  const recent5 = sorted.filter(r=>r.time&&r.dist).slice(-5);
+  const avgPS = recent5.length ? recent5.reduce((s,r)=>s+calcPaceSecs(r.dist,r.time),0)/recent5.length : null;
+  const tgtPS = goalPaceSecs(goal.time, raceKm);
+  const longMin = goal.race==='full' ? 26 : 15;
+  const recLong = runs.some(r => daysSince(r.date)<=14 && parseFloat(r.dist||0)>=longMin);
+
+  const items = [];
+  const add = (icon, text, color='var(--text-muted)') => items.push({icon,text,color});
+
+  // 레이스 페이즈
+  if (weeksToRace !== null) {
+    if      (weeksToRace <= 2)  add('🏁','레이스 2주 이내 — 테이퍼링 완료 단계. 짧고 가볍게만 달리고 새 훈련은 금물!', 'var(--accent3)');
+    else if (weeksToRace <= 4)  add('📉',`레이스 ${weeksToRace}주 전 — 테이퍼링 시작. 볼륨 20~30% 줄이되 페이스는 유지.`, 'var(--accent4)');
+    else if (weeksToRace <= 8)  add('🔥',`레이스 ${weeksToRace}주 전 — 피크 빌드업. 롱런 + 템포런에 집중하세요.`, 'var(--accent2)');
+    else                         add('🧱',`레이스 ${weeksToRace}주 전 — 베이스 빌딩 단계. 주당 10% 이하로 볼륨을 늘리세요.`,'var(--accent)');
+  }
+
+  // 80/20 존 분포
+  if (zt >= 4) {
+    if      (easyPct < 70) add('⚠️',`Z1+Z2 비중 ${easyPct.toFixed(0)}% — 너무 낮아요! 전체 달리기의 80%는 쉬워야 합니다. 부상·과훈련 위험.`,'var(--accent3)');
+    else if (grayPct > 25) add('🔶',`Z3(회색 구간) ${grayPct.toFixed(0)}% — 줄이세요. Z3는 너무 힘들고 너무 쉬워 효율이 낮습니다. Z2 또는 Z4로 양극화하세요.`,'var(--accent4)');
+    else                   add('✅',`존 분포 양호! 쉬운 달리기 ${easyPct.toFixed(0)}% / 고강도 ${hardPct.toFixed(0)}% — 80/20 원칙에 가깝습니다.`,'var(--accent2)');
+  }
+
+  // 롱런 체크
+  if (runs.length >= 3 && !recLong) add('📏',`최근 2주 내 롱런(${longMin}km↑)이 없어요. ${goal.race==='full'?'풀':'하프'}마라톤 완주에 롱런은 필수 세션입니다.`,'var(--accent4)');
+
+  // 볼륨 체크
+  const volTarget = goal.race==='full' ? 50 : 30;
+  if (weeklyKm > 0 && weeklyKm < volTarget*0.5) add('📈',`주간 볼륨 평균 ${weeklyKm.toFixed(0)}km — 목표 대비 낮아요. ${goal.race==='full'?'풀':'하프'} 준비엔 최소 ${volTarget}km/주 권장.`);
+
+  // 페이스 갭
+  if (avgPS && tgtPS) {
+    const gap = avgPS - tgtPS;
+    if      (gap > 90)  add('⏱',`현재 페이스(${fmtPace(avgPS)}) vs 목표(${fmtPace(tgtPS)}) — ${fmtPace(gap)} 차이. 기초 유산소 훈련에 집중하세요.`,'var(--accent3)');
+    else if (gap > 20)  add('⏱',`목표 페이스까지 ${fmtPace(gap)} 차이. 꾸준한 Z2 + 템포런으로 좁힐 수 있어요!`,'var(--accent4)');
+    else if (gap > -20) add('🎯',`현재 페이스가 목표와 거의 일치합니다. 지금 수준을 레이스까지 유지하는 게 핵심!`,'var(--accent2)');
+    else                add('🚀',`현재 페이스가 목표보다 빠릅니다! 목표 시간을 상향 조정해보세요.`,'var(--accent2)');
+  }
+
+  // 이번주 권장 세션
+  if (weeksToRace === null || weeksToRace > 2) {
+    const thisW = runs.filter(r=>daysSince(r.date)<=7);
+    const hasQ  = thisW.some(r=>r.runType==='tempo'||r.runType==='interval');
+    const hasLR = thisW.some(r=>parseFloat(r.dist||0)>=(goal.race==='full'?20:13));
+    const plan  = [];
+    if (!hasQ)  plan.push(goal.race==='full' ? '✦ 템포런 10~14km (목표 마라톤 페이스보다 10~15초/km 빠르게)' : '✦ 템포런 6~8km (목표 하프 페이스에서 10초/km 빠르게)');
+    if (!hasLR) plan.push(goal.race==='full' ? '✦ 롱런 24~32km (Z2 페이스, 완주 자신감 훈련)' : '✦ 롱런 15~20km (Z2 페이스)');
+    if (plan.length) add('📋','이번주 권장 세션:<br>' + plan.join('<br>'), 'var(--accent)');
+  }
+
+  if (!items.length) add('📝','목표와 기록을 입력하면 맞춤 어드바이스가 나타납니다.');
+  return items;
+}
+
+function addRun() {
+  const date = document.getElementById('runDate').value || today();
+  const dist = parseFloat(document.getElementById('runDist').value);
+  const time = document.getElementById('runTime').value;
+  const hr   = document.getElementById('runHR').value;
+  const memo = document.getElementById('runMemo').value;
+  if (!dist) { alert('거리를 입력하세요'); return; }
+  DB.get('runs').push({ id:Date.now(), date, dist, time, hr, memo, runType:selectedRunType });
+  DB.set('runs', DB.get('runs'));
+  ['runDist','runTime','runHR','runMemo'].forEach(id => document.getElementById(id).value='');
+  selectedRunType = null;
+  document.querySelectorAll('.run-type-chip').forEach(c=>c.classList.remove('selected'));
+  renderRunning();
+  notifyDataChanged();
+}
+
+function deleteRun(id) {
+  if (!confirm('삭제할까요?')) return;
+  DB.set('runs', DB.get('runs').filter(r => r.id !== id));
+  renderRunning();
+  notifyDataChanged();
+}
+
+function renderRunning() {
+  const runs = DB.get('runs').sort((a,b) => b.date.localeCompare(a.date));
+  const sorted = [...runs].sort((a,b) => a.date.localeCompare(b.date));
+  document.getElementById('runDate').value = today();
+
+  // ── 목표 로드
+  const goal = loadRunnerGoal();
+  const maxHR = goal.maxHR || 190;
+  const DIST  = { half:21.0975, full:42.195 };
+  const raceKm = DIST[goal.race] || DIST.half;
+  const raceLabel = goal.race === 'full' ? '풀마라톤' : '하프마라톤';
+  const now = new Date();
+
+  // ── 목표 요약
+  const tgtPS = goalPaceSecs(goal.time, raceKm);
+  const weeksLeft = goal.date ? Math.max(0,Math.floor((new Date(goal.date)-now)/604800000)) : null;
+  const withPace = sorted.filter(r=>calcPaceSecs(r.dist,r.time));
+  const recent5  = withPace.slice(-5);
+  const avgPS    = recent5.length ? recent5.reduce((s,r)=>s+calcPaceSecs(r.dist,r.time),0)/recent5.length : null;
+  let summHTML = '';
+  if (tgtPS) summHTML += `<div style="font-size:12px;margin-bottom:4px">🎯 목표 페이스 <strong>${fmtPace(tgtPS)}</strong> &nbsp;|&nbsp; 현재 평균 <strong>${avgPS?fmtPace(avgPS):'-'}</strong>`;
+  if (tgtPS && avgPS) { const gap=avgPS-tgtPS; summHTML += ` &nbsp;→ <span style="color:${gap>0?'var(--accent3)':'var(--accent2)'}">${gap>0?'+':''}${fmtPace(Math.abs(gap))}</span>`; }
+  if (summHTML) summHTML += '</div>';
+  if (weeksLeft !== null) summHTML += `<div style="font-size:12px;color:var(--text-muted)">📅 레이스까지 <strong style="color:var(--accent)">${weeksLeft}주</strong> 남음 (${goal.date})</div>`;
+  document.getElementById('goalSummary').innerHTML = summHTML;
+
+  // ── 코치 어드바이스
+  const advice = generateCoachAdvice(runs, goal, maxHR);
+  document.getElementById('coachAdvice').innerHTML = advice.map(a =>
+    `<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border-radius:8px;background:var(--surface2);font-size:12px;line-height:1.6">
+      <span style="font-size:16px;flex-shrink:0">${a.icon}</span>
+      <span style="color:${a.color||'var(--text)'}">${a.text}</span>
+    </div>`
+  ).join('');
+
+  // ── 존 분포 (최근 4주)
+  const last4w = runs.filter(r=>(now-new Date(r.date+'T00:00:00'))/86400000<=28);
+  const zc={1:0,2:0,3:0,4:0,5:0}; let zt=0;
+  last4w.forEach(r=>{const z=getRunZone(r,maxHR);if(z){zc[z]++;zt++;}});
+  document.getElementById('zoneLegend').innerHTML = Object.entries(ZONE_DEF).map(([z,d])=>
+    `<div style="display:flex;align-items:center;gap:5px;font-size:11px">
+      <div style="width:10px;height:10px;border-radius:50%;background:${d.color};flex-shrink:0"></div>
+      <span style="color:var(--text-muted)">${d.label} ${zt?Math.round(zc[z]/zt*100):0}%</span>
+    </div>`
+  ).join('');
+  document.getElementById('zoneStats').innerHTML = Object.entries(ZONE_DEF).map(([z,d])=>{
+    const pct = zt ? Math.round(zc[z]/zt*100) : 0;
+    return `<div style="margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:2px">
+        <span style="color:${d.color};font-weight:600">${d.label}</span>
+        <span style="color:var(--text-muted)">${zc[z]}회 (${pct}%)</span>
+      </div>
+      <div style="height:5px;background:var(--surface2);border-radius:3px">
+        <div style="width:${pct}%;height:100%;background:${d.color};border-radius:3px;transition:width 0.4s"></div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted)">${d.desc}</div>
+    </div>`;
+  }).join('');
+  if (runZoneChart) runZoneChart.destroy();
+  runZoneChart = new Chart(document.getElementById('runZoneChart').getContext('2d'), {
+    type: 'doughnut',
+    data: { labels: Object.values(ZONE_DEF).map(d=>d.label),
+      datasets:[{data:Object.keys(ZONE_DEF).map(z=>zc[z]||0),
+        backgroundColor:Object.values(ZONE_DEF).map(d=>d.color+'cc'),
+        borderColor:Object.values(ZONE_DEF).map(d=>d.color),
+        borderWidth:1}]},
+    options:{ cutout:'65%', plugins:{legend:{display:false}}, responsive:true, maintainAspectRatio:false }
+  });
+
+  // ── 주간 볼륨
+  const weekMap={};
+  sorted.forEach(r=>{const wk=getWeekKey(r.date);weekMap[wk]=(weekMap[wk]||0)+parseFloat(r.dist||0);});
+  const last12=(()=>{const res=[];const d=new Date(getWeekKey(today())+'T00:00:00');
+    for(let i=11;i>=0;i--){const wk=new Date(d);wk.setDate(d.getDate()-i*7);
+      const key=wk.toISOString().slice(0,10); res.push({key,km:+(weekMap[key]||0).toFixed(1)});}return res;})();
+  if (runWeeklyChart) runWeeklyChart.destroy();
+  runWeeklyChart = new Chart(document.getElementById('runWeeklyChart').getContext('2d'),{
+    type:'bar', data:{labels:last12.map(w=>w.key.slice(5)),
+      datasets:[{data:last12.map(w=>w.km),
+        backgroundColor:last12.map(w=>w.km>0?'rgba(94,216,164,0.65)':'rgba(113,113,122,0.12)'),borderRadius:5}]},
+    options:{...chartOpts(0),plugins:{legend:{display:false}}}
+  });
+
+  // ── 스탯
+  const totalKm=runs.reduce((s,r)=>s+parseFloat(r.dist||0),0);
+  const ym=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const prevYm=(()=>{const d=new Date(now.getFullYear(),now.getMonth()-1,1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;})();
+  const thisMonthKm=runs.filter(r=>r.date.startsWith(ym)).reduce((s,r)=>s+parseFloat(r.dist||0),0);
+  const lastMonthKm=runs.filter(r=>r.date.startsWith(prevYm)).reduce((s,r)=>s+parseFloat(r.dist||0),0);
+  const weekSet=new Set(sorted.map(r=>getWeekKey(r.date)));const weekArr=[...weekSet].sort();
+  let streak=0;
+  if(weekArr.length){let wk=new Date(weekArr[weekArr.length-1]+'T00:00:00');
+    const cw=new Date(getWeekKey(today())+'T00:00:00');
+    if((cw-wk)/86400000<=7){streak=1;for(let i=weekArr.length-2;i>=0;i--){const p=new Date(weekArr[i]+'T00:00:00');if((wk-p)/86400000===7){streak++;wk=p;}else break;}}}
+  document.getElementById('runStats').innerHTML = `
+    <div class="stat-chip"><div class="lbl">TOTAL KM</div><div class="val">${totalKm.toFixed(1)}</div></div>
+    <div class="stat-chip"><div class="lbl">RUN COUNT</div><div class="val">${runs.length}</div></div>
+    <div class="stat-chip"><div class="lbl">이번달</div><div class="val" style="color:var(--accent2)">${thisMonthKm.toFixed(1)}km</div></div>
+    <div class="stat-chip"><div class="lbl">지난달</div><div class="val" style="color:var(--text-muted)">${lastMonthKm.toFixed(1)}km</div></div>
+    <div class="stat-chip"><div class="lbl">연속 주</div><div class="val" style="color:${streak>=4?'var(--accent2)':'var(--accent4)'}">${streak}주${streak>=3?' 🔥':''}</div></div>
+    <div class="stat-chip"><div class="lbl">현재 평균페이스</div><div class="val" style="color:var(--accent);font-size:15px">${avgPS?fmtPace(avgPS):'-'}</div></div>
+  `;
+
+  // ── PR 칩
+  const bestPaceRec = withPace.length ? withPace.reduce((a,b)=>calcPaceSecs(a.dist,a.time)<calcPaceSecs(b.dist,b.time)?a:b) : null;
+  const bestDistRec = runs.length ? [...runs].sort((a,b)=>parseFloat(b.dist)-parseFloat(a.dist))[0] : null;
+  const prChip = (icon,label,val,sub) =>
+    `<div class="stat-chip" style="min-width:110px"><div class="lbl">${icon} ${label}</div><div class="val" style="color:var(--accent4);font-size:15px">${val}</div><div style="font-size:10px;color:var(--text-muted)">${sub}</div></div>`;
+  document.getElementById('runPR').innerHTML = [
+    bestPaceRec ? prChip('⚡','최고 페이스',fmtPace(calcPaceSecs(bestPaceRec.dist,bestPaceRec.time)),`${bestPaceRec.dist}km · ${bestPaceRec.date}`) : '',
+    bestDistRec ? prChip('📏','최장 거리',`${bestDistRec.dist}km`,bestDistRec.date) : '',
+    tgtPS       ? prChip('🎯','목표 페이스',fmtPace(tgtPS),raceLabel) : '',
+  ].join('');
+
+  // ── 페이스 트렌드 (존 색상 포인트)
+  const paceRuns = withPace.slice(-20);
+  if (runPaceChart) runPaceChart.destroy();
+  if (paceRuns.length >= 2) {
+    const paceM = paceRuns.map(r=>+(calcPaceSecs(r.dist,r.time)/60).toFixed(2));
+    const ma = paceM.map((v,i,a)=>i<2?null:+((a[i-2]+a[i-1]+a[i])/3).toFixed(2));
+    const tgtM = tgtPS ? tgtPS/60 : null;
+    const datasets = [
+      {label:'페이스(분/km)',data:paceM,borderColor:'#7c6af7',backgroundColor:'rgba(124,106,247,0.07)',fill:true,tension:0.3,
+        pointRadius:4,pointBackgroundColor:paceRuns.map(r=>{const z=getRunZone(r,maxHR);return z?ZONE_DEF[z].color:'#7c6af7';})},
+      {label:'3회 이동평균',data:ma,borderColor:'#5ed8a4',borderDash:[4,3],borderWidth:2,pointRadius:0,tension:0.4,fill:false},
+    ];
+    if (tgtM) datasets.push({label:'목표 페이스',data:paceRuns.map(()=>tgtM),borderColor:'#ffd700',borderDash:[6,4],borderWidth:1.5,pointRadius:0,fill:false});
+    runPaceChart = new Chart(document.getElementById('runPaceChart').getContext('2d'),{
+      type:'line', data:{labels:paceRuns.map(r=>fmtDate(r.date)),datasets},
+      options:{...chartOpts(0),
+        plugins:{legend:{display:true,labels:{color:'var(--text-muted)',font:{size:10},boxWidth:12,usePointStyle:true}}},
+        scales:{y:{reverse:true,ticks:{callback:v=>{const m=Math.floor(v),s=Math.round((v-m)*60);return `${m}:${String(s).padStart(2,'0')}`;},color:'var(--text-muted)',font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}},
+          x:{ticks:{color:'var(--text-muted)',font:{size:10}},grid:{display:false}}}}
+    });
+  }
+
+  // ── 거리 바 차트 (유형별 색상)
+  const dist15 = sorted.slice(-15);
+  if (runChart) runChart.destroy();
+  runChart = new Chart(document.getElementById('runPageChart').getContext('2d'),{
+    type:'bar',
+    data:{labels:dist15.map(r=>fmtDate(r.date)),datasets:[{data:dist15.map(r=>r.dist),
+      backgroundColor:dist15.map(r=>{
+        if(r.runType&&RUN_TYPE_DEF[r.runType]) return RUN_TYPE_DEF[r.runType].color+'bb';
+        const z=getRunZone(r,maxHR); return z?ZONE_DEF[z].color+'bb':'rgba(124,106,247,0.7)';
+      }),borderRadius:6}]},
+    options:{...chartOpts(0),plugins:{legend:{display:false}}}
+  });
+
+  // ── 테이블
+  const tbody=document.getElementById('runTable'),empty=document.getElementById('runEmpty');
+  if(!runs.length){tbody.innerHTML='';empty.style.display='block';return;}
+  empty.style.display='none';
+  tbody.innerHTML=runs.map(r=>{
+    const z=getRunZone(r,maxHR);
+    return `<tr>
+      <td>${fmtDateLong(r.date)}</td>
+      <td>${runTypeBadge(r.runType)}</td>
+      <td><strong>${r.dist}km</strong></td>
+      <td>${r.time||'-'}</td>
+      <td>${calcPace(r.dist,r.time)}</td>
+      <td>${r.hr?r.hr+' bpm':'-'}</td>
+      <td>${zoneBadge(z)}</td>
+      <td style="color:var(--text-muted);font-size:12px">${r.memo||''}</td>
+      <td><button class="btn btn-danger" onclick="deleteRun(${r.id})">삭제</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function importGarminCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const lines = e.target.result.split('\n');
+    const header = lines[0].split(',').map(h => h.trim().replace(/"/g,'').toLowerCase());
+    const runs = DB.get('runs');
+    let count = 0;
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(',').map(c => c.trim().replace(/"/g,''));
+      if (cols.length < 3) continue;
+      const dateIdx = header.findIndex(h => h.includes('date') || h.includes('날짜'));
+      const distIdx = header.findIndex(h => h.includes('distance') || h.includes('거리'));
+      const timeIdx = header.findIndex(h => h.includes('time') || h.includes('시간'));
+      const hrIdx = header.findIndex(h => h.includes('heart') || h.includes('심박'));
+      if (dateIdx < 0 || distIdx < 0) continue;
+      const rawDate = cols[dateIdx];
+      const dateMatch = rawDate.match(/(\d{4})[.\-\/](\d{1,2})[.\-\/](\d{1,2})/);
+      if (!dateMatch) continue;
+      const date = `${dateMatch[1]}-${dateMatch[2].padStart(2,'0')}-${dateMatch[3].padStart(2,'0')}`;
+      const dist = parseFloat(cols[distIdx].replace(/[^0-9.]/g,''));
+      if (!dist) continue;
+      if (runs.find(r => r.date === date)) continue; // skip duplicate
+      runs.push({
+        id: Date.now() + i,
+        date,
+        dist: dist > 50 ? (dist/1000).toFixed(2) : dist, // handle meters
+        time: timeIdx >= 0 ? cols[timeIdx] : '',
+        hr: hrIdx >= 0 ? cols[hrIdx] : '',
+        memo: 'Garmin'
+      });
+      count++;
+    }
+    DB.set('runs', runs);
+    alert(`${count}개의 러닝 기록을 가져왔어요!`);
+    renderRunning();
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+// ═══════════════════════════════════
+// INBODY
+// ═══════════════════════════════════
+let ibCharts = {};
+function addInbody() {
+  const date = document.getElementById('ibDate').value || today();
+  const weight = document.getElementById('ibWeight').value;
+  const fat = document.getElementById('ibFat').value;
+  const muscle = document.getElementById('ibMuscle').value;
+  const bmi = document.getElementById('ibBMI').value;
+  const bmr = document.getElementById('ibBMR').value;
+  if (!weight) { alert('체중을 입력하세요'); return; }
+  const data = DB.get('inbody');
+  data.push({ id: Date.now(), date, weight, fat, muscle, bmi, bmr });
+  DB.set('inbody', data);
+  renderInbody();
+}
+
+function deleteInbody(id) {
+  if (!confirm('삭제?')) return;
+  DB.set('inbody', DB.get('inbody').filter(r => r.id !== id));
+  renderInbody();
+}
+
+function renderInbody() {
+  document.getElementById('ibDate').value = today();
+  const data = DB.get('inbody').sort((a,b) => a.date.localeCompare(b.date));
+  const sorted = [...data];
+
+  if (ibCharts.w) ibCharts.w.destroy();
+  if (ibCharts.f) ibCharts.f.destroy();
+
+  ibCharts.w = new Chart(document.getElementById('ibWeightChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: sorted.map(d => fmtDate(d.date)),
+      datasets: [
+        { label: '체중', data: sorted.map(d => d.weight), borderColor: '#7c6af7', backgroundColor: 'rgba(124,106,247,0.1)', fill: true, tension: 0.4 },
+        { label: '골격근량', data: sorted.map(d => d.muscle), borderColor: '#5ed8a4', tension: 0.4 }
+      ]
+    },
+    options: { ...chartOpts(0), plugins: { legend: { display: true, labels: { color: '#8888aa', font: { size: 11 } } } } }
+  });
+
+  ibCharts.f = new Chart(document.getElementById('ibFatChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: sorted.map(d => fmtDate(d.date)),
+      datasets: [{ label: '체지방률 %', data: sorted.map(d => d.fat), borderColor: '#f76a6a', backgroundColor: 'rgba(247,106,106,0.1)', fill: true, tension: 0.4 }]
+    },
+    options: { ...chartOpts(0), plugins: { legend: { display: true, labels: { color: '#8888aa', font: { size: 11 } } } } }
+  });
+
+  const tbody = document.getElementById('ibTable');
+  const empty = document.getElementById('ibEmpty');
+  const desc = [...data].reverse();
+  if (desc.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  tbody.innerHTML = desc.map(r => `
+    <tr>
+      <td>${fmtDateLong(r.date)}</td>
+      <td><strong>${r.weight} kg</strong></td>
+      <td>${r.fat ? r.fat + '%' : '-'}</td>
+      <td>${r.muscle ? r.muscle + ' kg' : '-'}</td>
+      <td>${r.bmi || '-'}</td>
+      <td>${r.bmr ? r.bmr + ' kcal' : '-'}</td>
+      <td><button class="btn btn-danger" onclick="deleteInbody(${r.id})">삭제</button></td>
+    </tr>
+  `).join('');
+}
+
+// ═══════════════════════════════════
+// SKIN
+// ═══════════════════════════════════
+let skinCalState = { year: new Date().getFullYear(), month: new Date().getMonth() };
+let selectedSkinDate = null;
+let maskOn = false;
+
+function selectSkinDate(dateStr) {
+  selectedSkinDate = dateStr;
+  document.getElementById('skinDate').value = dateStr;
+  const rec = DB.get('skins').find(s => s.date === dateStr);
+  maskOn = rec ? rec.mask : false;
+  document.getElementById('maskToggle').classList.toggle('on', maskOn);
+  document.getElementById('maskLabel').textContent = maskOn ? '✓ 마스크팩 했어요' : '안 함';
+  document.getElementById('skinStatus').value = rec ? (rec.status || '') : '';
+  document.getElementById('skinMemo').value = rec ? (rec.memo || '') : '';
+  // detail panel
+  const el = document.getElementById('skinCalDetail');
+  if (!rec) {
+    el.innerHTML = `<div class="cal-detail-empty">📅 ${fmtDateLong(dateStr)} — 기록 없음</div>`;
+  } else {
+    el.innerHTML = `<div class="cal-detail">
+      <div class="cal-detail-date">📅 ${fmtDateLong(dateStr)}</div>
+      <div class="cal-detail-row">
+        <span class="cal-detail-badge ${rec.mask ? 'yes' : 'no'}">${rec.mask ? '✓ 마스크팩' : '마스크팩 없음'}</span>
+        ${rec.status ? `<span class="cal-detail-badge yes">${rec.status}</span>` : ''}
+        ${rec.memo ? `<span style="color:var(--text-muted)">${rec.memo}</span>` : ''}
+      </div>
+    </div>`;
+  }
+  renderSkinCal();
+}
+
+function toggleMask() {
+  maskOn = !maskOn;
+  const tog = document.getElementById('maskToggle');
+  const lbl = document.getElementById('maskLabel');
+  tog.classList.toggle('on', maskOn);
+  lbl.textContent = maskOn ? '✓ 마스크팩 했어요' : '안 함';
+}
+
+function addSkin() {
+  const date = document.getElementById('skinDate').value || today();
+  const status = document.getElementById('skinStatus').value;
+  const memo = document.getElementById('skinMemo').value;
+  const data = DB.get('skins');
+  const existing = data.findIndex(s => s.date === date);
+  const record = { id: Date.now(), date, mask: maskOn, status, memo };
+  if (existing >= 0) data[existing] = record; else data.push(record);
+  DB.set('skins', data);
+  document.getElementById('skinMemo').value = '';
+  document.getElementById('skinStatus').value = '';
+  maskOn = false;
+  document.getElementById('maskToggle').classList.remove('on');
+  document.getElementById('maskLabel').textContent = '안 함';
+  selectedSkinDate = date;
+  renderSkin();
+}
+
+function deleteSkin(id) {
+  if (!confirm('삭제?')) return;
+  DB.set('skins', DB.get('skins').filter(r => r.id !== id));
+  renderSkin();
+}
+
+function skinCalPrev() { skinCalState.month--; if (skinCalState.month < 0) { skinCalState.month = 11; skinCalState.year--; } renderSkinCal(); }
+function skinCalNext() { skinCalState.month++; if (skinCalState.month > 11) { skinCalState.month = 0; skinCalState.year++; } renderSkinCal(); }
+
+function renderSkinCal() {
+  const skins = DB.get('skins');
+  renderCal('skinCal', 'skinCalTitle', skinCalState.year, skinCalState.month, (d) => {
+    const s = skins.find(x => x.date === d);
+    if (!s) return '';
+    return s.mask ? 'marked' : 'marked-run';
+  }, selectedSkinDate, 'selectSkinDate');
+}
+
+function renderSkin() {
+  document.getElementById('skinDate').value = selectedSkinDate || today();
+  renderSkinCal();
+  const data = DB.get('skins').sort((a,b) => b.date.localeCompare(a.date));
+  const tbody = document.getElementById('skinTable');
+  const empty = document.getElementById('skinEmpty');
+  if (data.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  const statusEmoji = { '매우좋음': '😊', '좋음': '🙂', '보통': '😐', '나쁨': '😟', '매우나쁨': '😣' };
+  tbody.innerHTML = data.map(r => `
+    <tr>
+      <td>${fmtDateLong(r.date)}</td>
+      <td>${r.mask ? '<span class="tag green">✓ 마스크팩</span>' : '<span style="color:var(--text-muted);font-size:13px">-</span>'}</td>
+      <td>${r.status ? (statusEmoji[r.status]||'') + ' ' + r.status : '-'}</td>
+      <td style="color:var(--text-muted);font-size:13px">${r.memo || ''}</td>
+      <td><button class="btn btn-danger" onclick="deleteSkin(${r.id})">삭제</button></td>
+    </tr>
+  `).join('');
+}
+
+// ═══════════════════════════════════
+// SUPPLEMENT
+// ═══════════════════════════════════
+let selectedSupps = new Set();
+
+function addSuppType() {
+  const val = document.getElementById('newSupp').value.trim();
+  if (!val) return;
+  const types = DB.getObj('suppTypes', { list: [] });
+  if (!types.list.includes(val)) types.list.push(val);
+  DB.setObj('suppTypes', types);
+  document.getElementById('newSupp').value = '';
+  renderSuppTypes();
+  renderSuppSelector();
+}
+
+function deleteSuppType(name) {
+  const types = DB.getObj('suppTypes', { list: [] });
+  types.list = types.list.filter(t => t !== name);
+  DB.setObj('suppTypes', types);
+  selectedSupps.delete(name);
+  renderSuppTypes();
+  renderSuppSelector();
+}
+
+function renderSuppTypes() {
+  const types = DB.getObj('suppTypes', { list: [] });
+  const el = document.getElementById('suppTypeList');
+  if (types.list.length === 0) {
+    el.innerHTML = '<span style="color:var(--text-muted);font-size:13px">아직 영양제가 없어요. 위에서 추가하세요.</span>';
+    return;
+  }
+  el.innerHTML = types.list.map(t => `
+    <div style="display:flex;align-items:center;gap:4px">
+      <div class="tag">${t}</div>
+      <button class="btn btn-danger" onclick="deleteSuppType('${t}')" style="padding:2px 7px;font-size:11px">✕</button>
+    </div>
+  `).join('');
+}
+
+function renderSuppSelector() {
+  const types = DB.getObj('suppTypes', { list: [] });
+  const el = document.getElementById('suppSelector');
+  el.innerHTML = types.list.map(t => `
+    <div class="supp-chip ${selectedSupps.has(t) ? 'selected' : ''}" onclick="toggleSuppSel('${t}')">${t}</div>
+  `).join('');
+}
+
+function toggleSuppSel(name) {
+  if (selectedSupps.has(name)) selectedSupps.delete(name);
+  else selectedSupps.add(name);
+  renderSuppSelector();
+}
+
+function saveSuppRecord() {
+  const date = document.getElementById('suppDate').value || today();
+  const memo = document.getElementById('suppMemo').value;
+  const list = [...selectedSupps];
+  if (list.length === 0) { alert('영양제를 선택하세요'); return; }
+  const records = DB.get('suppRecords');
+  const existing = records.findIndex(r => r.date === date);
+  const record = { id: Date.now(), date, list, memo };
+  if (existing >= 0) records[existing] = record; else records.push(record);
+  DB.set('suppRecords', records);
+  selectedSupps.clear();
+  document.getElementById('suppMemo').value = '';
+  renderSuppSelector();
+  renderSuppCal();
+  renderSuppTable();
+  // 저장 후 해당 날짜 상세 갱신
+  if (selectedSuppCalDate === date) showSuppDetail(date);
+}
+
+function deleteSuppRecord(id) {
+  if (!confirm('삭제?')) return;
+  DB.set('suppRecords', DB.get('suppRecords').filter(r => r.id !== id));
+  renderSuppCal();
+  renderSuppTable();
+}
+
+function renderSuppTable() {
+  const records = DB.get('suppRecords').sort((a,b) => b.date.localeCompare(a.date));
+  const tbody = document.getElementById('suppTable');
+  const empty = document.getElementById('suppEmpty');
+  if (records.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  tbody.innerHTML = records.map(r => `
+    <tr>
+      <td>${fmtDateLong(r.date)}</td>
+      <td>${r.list.map(s => `<span class="tag">${s}</span>`).join('')}</td>
+      <td style="color:var(--text-muted);font-size:13px">${r.memo || ''}</td>
+      <td><button class="btn btn-danger" onclick="deleteSuppRecord(${r.id})">삭제</button></td>
+    </tr>
+  `).join('');
+}
+
+// 영양제별 고정 색상
+const suppColorPalette = [
+  '#7c6af7','#5ed8a4','#f7c26a','#f76a6a','#60a5fa','#f472b6','#34d399','#fb923c','#a78bfa','#22d3ee'
+];
+const suppColorMap = {};
+function getSuppColor(name) {
+  if (!suppColorMap[name]) {
+    const keys = Object.keys(suppColorMap);
+    suppColorMap[name] = suppColorPalette[keys.length % suppColorPalette.length];
+  }
+  return suppColorMap[name];
+}
+
+let suppCalState = { year: new Date().getFullYear(), month: new Date().getMonth() };
+
+function suppCalPrev() {
+  suppCalState.month--;
+  if (suppCalState.month < 0) { suppCalState.month = 11; suppCalState.year--; }
+  renderSuppCal();
+}
+function suppCalNext() {
+  suppCalState.month++;
+  if (suppCalState.month > 11) { suppCalState.month = 0; suppCalState.year++; }
+  renderSuppCal();
+}
+
+function renderSuppCal() {
+  const { year, month } = suppCalState;
+  const records = DB.get('suppRecords');
+  const todayStr = today();
+
+  // 날짜별 영양제 맵
+  const dateMap = {};
+  records.forEach(r => { dateMap[r.date] = r.list; });
+
+  // 이 달에 등장한 모든 영양제 미리 색상 등록
+  Object.values(dateMap).forEach(list => list.forEach(s => getSuppColor(s)));
+
+  const title = document.getElementById('suppCalTitle');
+  title.textContent = `${year}년 ${month + 1}월`;
+
+  const firstDowSupp = new Date(year, month, 1).getDay(); // 0=일
+  const first = (firstDowSupp + 6) % 7; // 월요일 기준 오프셋
+  const days = new Date(year, month + 1, 0).getDate();
+
+  let html = '<div class="cal-grid">';
+  ['월','화','수','목','금','토','일'].forEach(d => {
+    html += `<div class="cal-day-label">${d}</div>`;
+  });
+  for (let i = 0; i < first; i++) html += '<div class="cal-day empty"></div>';
+
+  for (let d = 1; d <= days; d++) {
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const list = dateMap[dateStr] || [];
+    const isToday = dateStr === todayStr;
+    const isSelected = dateStr === selectedSuppCalDate;
+    const hasMeds = list.length > 0;
+
+    const dots = list.slice(0, 4).map(s =>
+      `<div style="width:5px;height:5px;border-radius:50%;background:${getSuppColor(s)};flex-shrink:0"></div>`
+    ).join('');
+
+    let bg = hasMeds ? 'background:rgba(124,106,247,0.06);' : '';
+    let border = '';
+    if (isSelected) { bg = 'background:rgba(124,106,247,0.18);'; border = 'outline:2px solid var(--accent);outline-offset:-2px;'; }
+    else if (isToday) { border = 'outline:1px solid rgba(124,106,247,0.5);outline-offset:-1px;'; }
+
+    html += `
+      <div class="cal-day" style="${bg}${border}cursor:pointer"
+           onclick="showSuppDetail('${dateStr}')" title="${dateStr}">
+        <span style="font-size:12px;${isSelected ? 'color:var(--accent);font-weight:700' : isToday ? 'color:var(--accent);font-weight:600' : 'color:var(--text-muted)'}">${d}</span>
+        ${hasMeds ? `<div style="display:flex;flex-wrap:wrap;gap:2px;justify-content:center;margin-top:2px">${dots}</div>` : ''}
+      </div>`;
+  }
+  html += '</div>';
+
+  // 범례
+  const allSupps = [...new Set(Object.values(dateMap).flat())];
+  if (allSupps.length > 0) {
+    html += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">`;
+    allSupps.forEach(s => {
+      html += `<div style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-muted)">
+        <div style="width:8px;height:8px;border-radius:50%;background:${getSuppColor(s)}"></div>${s}
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  document.getElementById('suppCal').innerHTML = html;
+  document.getElementById('suppCalDetail').innerHTML = '';
+}
+
+let selectedSuppCalDate = null;
+
+function showSuppDetail(dateStr) {
+  selectedSuppCalDate = dateStr;
+
+  // 날짜 입력 업데이트
+  document.getElementById('suppDate').value = dateStr;
+
+  // 그날 기록 불러와서 영양제 선택 상태 반영
+  const records = DB.get('suppRecords');
+  const rec = records.find(r => r.date === dateStr);
+  selectedSupps = new Set(rec ? rec.list : []);
+  document.getElementById('suppMemo').value = rec ? (rec.memo || '') : '';
+  renderSuppSelector();
+
+  // 달력 선택 표시 갱신
+  renderSuppCal();
+
+  // 상세 표시
+  const detail = document.getElementById('suppCalDetail');
+  if (!rec || rec.list.length === 0) {
+    detail.innerHTML = `<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted)">
+      <span>${fmtDateLong(dateStr)}</span><span>— 기록 없음. 위에서 영양제를 선택 후 저장하세요.</span>
+    </div>`;
+    return;
+  }
+  detail.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--text-muted)">${fmtDateLong(dateStr)}</span>
+      ${rec.list.map(s => `<span style="padding:3px 10px;border-radius:4px;font-size:12px;font-weight:500;background:${getSuppColor(s)}22;color:${getSuppColor(s)};border:1px solid ${getSuppColor(s)}44">${s}</span>`).join('')}
+      ${rec.memo ? `<span style="font-size:12px;color:var(--text-muted)">— ${rec.memo}</span>` : ''}
+    </div>`;
+}
+
+function renderSupp() {
+  document.getElementById('suppDate').value = today();
+  renderSuppTypes();
+  renderSuppSelector();
+  renderSuppCal();
+  renderSuppTable();
+}
+
+// ═══════════════════════════════════
+// CONDITION
+// ═══════════════════════════════════
+let condChart = null;
+function toggleCondTag(el) { el.classList.toggle('selected'); }
+function updateScoreColor(v) {}
+
+// ── 데이터 변경 시 분석 자동 갱신
+function notifyDataChanged() {
+  if (currentPage === 'analysis') renderAnalysis();
+}
+
+function saveCondition() {
+  const date = document.getElementById('condDate').value || today();
+  const score = parseInt(document.getElementById('condScore').value);
+  const tags = [...document.querySelectorAll('#condTags .supp-chip.selected')].map(e => e.textContent.trim());
+  const memo = document.getElementById('condMemo').value;
+  const mBig = document.getElementById('condMBig').classList.contains('selected');
+  const mSmall = document.getElementById('condMSmall').classList.contains('selected');
+  const alcohol = document.getElementById('condAlcohol').classList.contains('selected');
+  const data = DB.get('conditions');
+  const existing = data.findIndex(c => c.date === date);
+  const record = { id: Date.now(), date, score, tags, memo, mBig, mSmall, alcohol };
+  if (existing >= 0) data[existing] = record; else data.push(record);
+  DB.set('conditions', data);
+  document.getElementById('condMemo').value = '';
+  document.getElementById('condScore').value = 3;
+  document.getElementById('condScoreDisplay').textContent = '3';
+  document.querySelectorAll('#condTags .supp-chip.selected').forEach(e => e.classList.remove('selected'));
+  document.getElementById('condMBig').classList.remove('selected');
+  document.getElementById('condMSmall').classList.remove('selected');
+  document.getElementById('condAlcohol').classList.remove('selected');
+  renderCondition();
+  notifyDataChanged();
+}
+
+function deleteCondition(id) {
+  if (!confirm('삭제?')) return;
+  DB.set('conditions', DB.get('conditions').filter(r => r.id !== id));
+  renderCondition();
+  notifyDataChanged();
+}
+
+let condCalState = { year: new Date().getFullYear(), month: new Date().getMonth() };
+let selectedCondDate = null;
+
+function condCalPrev() { condCalState.month--; if (condCalState.month < 0) { condCalState.month = 11; condCalState.year--; } renderCondCal(); }
+function condCalNext() { condCalState.month++; if (condCalState.month > 11) { condCalState.month = 0; condCalState.year++; } renderCondCal(); }
+
+function renderCondCal() {
+  const conds = DB.get('conditions');
+  renderCal('condCal', 'condCalTitle', condCalState.year, condCalState.month, (d) => {
+    const c = conds.find(x => x.date === d);
+    if (!c) return '';
+    if (c.score >= 5) return 'marked';        // 초록 — 매우좋음
+    if (c.score >= 4) return 'marked-purple';  // 보라 — 좋음
+    if (c.score >= 3) return 'marked-yellow';  // 노랑 — 보통
+    return 'marked-red';                       // 빨강 — 나쁨
+  }, selectedCondDate, 'selectCondDate');
+}
+
+function selectCondDate(dateStr) {
+  selectedCondDate = dateStr;
+  document.getElementById('condDate').value = dateStr;
+  const rec = DB.get('conditions').find(c => c.date === dateStr);
+  if (rec) {
+    document.getElementById('condScore').value = rec.score;
+    document.getElementById('condScoreDisplay').textContent = rec.score;
+    document.getElementById('condMemo').value = rec.memo || '';
+    document.getElementById('condMBig').classList.toggle('selected', !!rec.mBig);
+    document.getElementById('condMSmall').classList.toggle('selected', !!rec.mSmall);
+    document.getElementById('condAlcohol').classList.toggle('selected', !!rec.alcohol);
+    const tagChips = document.querySelectorAll('#condTags .supp-chip');
+    tagChips.forEach(chip => {
+      chip.classList.toggle('selected', (rec.tags||[]).includes(chip.textContent.trim()));
+    });
+  }
+  // detail panel
+  const scoreLabel = ['','😣 매우나쁨','😟 나쁨','😐 보통','😊 좋음','🤩 매우좋음'];
+  const el = document.getElementById('condCalDetail');
+  if (!rec) {
+    el.innerHTML = `<div class="cal-detail-empty">📅 ${fmtDateLong(dateStr)} — 기록 없음</div>`;
+  } else {
+    const scoreColor = rec.score >= 5 ? 'var(--accent2)' : rec.score >= 4 ? 'var(--accent)' : rec.score >= 3 ? 'var(--accent4)' : 'var(--accent3)';
+    el.innerHTML = `<div class="cal-detail">
+      <div class="cal-detail-date">📅 ${fmtDateLong(dateStr)}</div>
+      <div class="cal-detail-row" style="align-items:center;gap:8px">
+        <span style="font-size:18px;font-weight:700;color:${scoreColor}">${rec.score}점</span>
+        <span style="font-size:13px;color:${scoreColor}">${scoreLabel[rec.score]||''}</span>
+      </div>
+      <div class="cal-detail-row" style="flex-wrap:wrap;gap:6px">
+        ${rec.mBig    ? `<span class="cal-detail-badge yes">M</span>` : ''}
+        ${rec.mSmall  ? `<span class="cal-detail-badge yes">m</span>` : ''}
+        ${rec.alcohol ? `<span class="cal-detail-badge red">🍺 음주</span>` : ''}
+        ${(rec.tags||[]).map(t=>`<span class="cal-detail-badge yes">${t}</span>`).join('')}
+      </div>
+      ${rec.memo ? `<div style="color:var(--text-muted);font-size:12px">${rec.memo}</div>` : ''}
+    </div>`;
+  }
+  renderCondCal();
+}
+
+function renderCondition() {
+  document.getElementById('condDate').value = selectedCondDate || today();
+  renderCondCal();
+  const data = DB.get('conditions').sort((a,b) => a.date.localeCompare(b.date));
+
+  if (condChart) condChart.destroy();
+  const ctx = document.getElementById('condPageChart').getContext('2d');
+  condChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: data.map(c => fmtDate(c.date)),
+      datasets: [{
+        data: data.map(c => c.score),
+        borderColor: '#7c6af7',
+        backgroundColor: 'rgba(124,106,247,0.12)',
+        fill: true, tension: 0.4,
+        pointBackgroundColor: data.map(c => scoreColor(c.score)),
+        pointRadius: 5
+      }]
+    },
+    options: chartOpts(1, 5)
+  });
+
+  const avg = data.length ? (data.reduce((s,c) => s+c.score, 0)/data.length).toFixed(1) : '-';
+  const max = data.length ? Math.max(...data.map(c => c.score)) : '-';
+  const min = data.length ? Math.min(...data.map(c => c.score)) : '-';
+  document.getElementById('condAvgStats').innerHTML = `
+    <div><span style="font-size:22px;font-weight:700;color:var(--accent)">${avg}</span><br><span style="font-size:12px;color:var(--text-muted)">평균</span></div>
+    <div><span style="font-size:22px;font-weight:700;color:var(--accent2)">${max}</span><br><span style="font-size:12px;color:var(--text-muted)">최고</span></div>
+    <div><span style="font-size:22px;font-weight:700;color:var(--accent3)">${min}</span><br><span style="font-size:12px;color:var(--text-muted)">최저</span></div>
+    <div><span style="font-size:22px;font-weight:700">${data.length}</span><br><span style="font-size:12px;color:var(--text-muted)">기록일</span></div>
+  `;
+
+  const tbody = document.getElementById('condTable');
+  const empty = document.getElementById('condEmpty');
+  const desc = [...data].reverse();
+  if (desc.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  tbody.innerHTML = desc.map(r => `
+    <tr>
+      <td>${fmtDateLong(r.date)}</td>
+      <td>
+        <div class="score-bar-wrap">
+          <strong style="color:${scoreColor(r.score)};width:20px">${r.score}</strong>
+          <div class="score-bar"><div class="score-bar-fill" style="width:${r.score*10}%;background:${scoreColor(r.score)}"></div></div>
+        </div>
+      </td>
+      <td style="white-space:nowrap">
+        ${r.mBig ? `<span style="font-weight:700;color:var(--accent);font-size:14px">M</span>` : ''}
+        ${r.mSmall ? `<span style="font-weight:700;color:var(--accent2);font-size:14px;margin-left:${r.mBig?'6px':'0'}">m</span>` : ''}
+        ${r.alcohol ? `<span style="font-size:14px;margin-left:${(r.mBig||r.mSmall)?'6px':'0'}">🍺</span>` : ''}
+        ${!r.mBig && !r.mSmall && !r.alcohol ? `<span style="color:var(--text-muted);font-size:12px">-</span>` : ''}
+      </td>
+      <td>${(r.tags||[]).map(t => `<span class="tag" style="font-size:11px">${t}</span>`).join('')}</td>
+      <td style="color:var(--text-muted);font-size:13px">${r.memo || ''}</td>
+      <td><button class="btn btn-danger" onclick="deleteCondition(${r.id})">삭제</button></td>
+    </tr>
+  `).join('');
+}
+
+// ═══════════════════════════════════
+// EYE
+// ═══════════════════════════════════
+let eyeCalState = { year: new Date().getFullYear(), month: new Date().getMonth() };
+let selectedEyeDate = null;
+let eyePainOn = false, eyeDropOn = false;
+
+function selectEyeDate(dateStr) {
+  selectedEyeDate = dateStr;
+  document.getElementById('eyeDate').value = dateStr;
+  const rec = DB.get('eyes').find(e => e.date === dateStr);
+  eyePainOn = rec ? rec.pain : false;
+  eyeDropOn = rec ? rec.drop : false;
+  document.getElementById('eyePainToggle').classList.toggle('on', eyePainOn);
+  document.getElementById('eyeDropToggle').classList.toggle('on', eyeDropOn);
+  document.getElementById('eyePainToggle').textContent = eyePainOn ? '✓' : '✗';
+  document.getElementById('eyeDropToggle').textContent = eyeDropOn ? '✓' : '✗';
+  document.getElementById('eyePainLabel').textContent = eyePainOn ? '통증 있음' : '통증 없음';
+  document.getElementById('eyeDropLabel').textContent = eyeDropOn ? '안약 넣음' : '안 넣음';
+  document.getElementById('eyePainLevel').value = rec ? (rec.painLevel || 0) : 0;
+  document.getElementById('eyeMemo').value = rec ? (rec.memo || '') : '';
+  // detail panel
+  const el = document.getElementById('eyeCalDetail');
+  if (!rec) {
+    el.innerHTML = `<div class="cal-detail-empty">📅 ${fmtDateLong(dateStr)} — 기록 없음</div>`;
+  } else {
+    const painLevels = ['없음','아주 약함','약함','보통','강함','매우 강함'];
+    el.innerHTML = `<div class="cal-detail">
+      <div class="cal-detail-date">📅 ${fmtDateLong(dateStr)}</div>
+      <div class="cal-detail-row">
+        <span class="cal-detail-badge ${rec.pain ? 'red' : 'no'}">${rec.pain ? '👁 통증' : '통증 없음'}</span>
+        ${rec.pain && rec.painLevel ? `<span class="cal-detail-badge red">강도 ${rec.painLevel} (${painLevels[rec.painLevel]})</span>` : ''}
+        <span class="cal-detail-badge ${rec.drop ? 'yes' : 'no'}">${rec.drop ? '💧 안약' : '안약 없음'}</span>
+        ${rec.memo ? `<span style="color:var(--text-muted)">${rec.memo}</span>` : ''}
+      </div>
+    </div>`;
+  }
+  renderEyeCal();
+}
+
+function toggleEyePain() {
+  eyePainOn = !eyePainOn;
+  document.getElementById('eyePainToggle').classList.toggle('on', eyePainOn);
+  document.getElementById('eyePainToggle').textContent = eyePainOn ? '✓' : '✗';
+  document.getElementById('eyePainLabel').textContent = eyePainOn ? '통증 있음' : '통증 없음';
+}
+function toggleEyeDrop() {
+  eyeDropOn = !eyeDropOn;
+  document.getElementById('eyeDropToggle').classList.toggle('on', eyeDropOn);
+  document.getElementById('eyeDropToggle').textContent = eyeDropOn ? '✓' : '✗';
+  document.getElementById('eyeDropLabel').textContent = eyeDropOn ? '안약 넣음' : '안 넣음';
+}
+
+function saveEye() {
+  const date = document.getElementById('eyeDate').value || today();
+  const painLevel = parseInt(document.getElementById('eyePainLevel').value);
+  const memo = document.getElementById('eyeMemo').value;
+  const data = DB.get('eyes');
+  const existing = data.findIndex(e => e.date === date);
+  const record = { id: Date.now(), date, pain: eyePainOn, drop: eyeDropOn, painLevel, memo };
+  if (existing >= 0) data[existing] = record; else data.push(record);
+  DB.set('eyes', data);
+  document.getElementById('eyeMemo').value = '';
+  eyePainOn = false; eyeDropOn = false;
+  document.getElementById('eyePainToggle').classList.remove('on');
+  document.getElementById('eyeDropToggle').classList.remove('on');
+  document.getElementById('eyePainToggle').textContent = '✗';
+  document.getElementById('eyeDropToggle').textContent = '✗';
+  document.getElementById('eyePainLabel').textContent = '통증 없음';
+  document.getElementById('eyeDropLabel').textContent = '안 넣음';
+  selectedEyeDate = date;
+  renderEye();
+  notifyDataChanged();
+}
+
+function deleteEye(id) {
+  if (!confirm('삭제?')) return;
+  DB.set('eyes', DB.get('eyes').filter(r => r.id !== id));
+  renderEye();
+}
+
+function eyeCalPrev() { eyeCalState.month--; if (eyeCalState.month < 0) { eyeCalState.month = 11; eyeCalState.year--; } renderEyeCal(); }
+function eyeCalNext() { eyeCalState.month++; if (eyeCalState.month > 11) { eyeCalState.month = 0; eyeCalState.year++; } renderEyeCal(); }
+
+function renderEyeCal() {
+  const eyes = DB.get('eyes');
+  renderCal('eyeCal', 'eyeCalTitle', eyeCalState.year, eyeCalState.month, (d) => {
+    const e = eyes.find(x => x.date === d);
+    if (!e) return '';
+    if (e.pain && e.drop) return 'marked-run';
+    if (e.pain) return 'marked-pain';
+    if (e.drop) return 'marked';
+    return '';
+  }, selectedEyeDate, 'selectEyeDate');
+}
+
+function renderEye() {
+  document.getElementById('eyeDate').value = selectedEyeDate || today();
+  renderEyeCal();
+  const data = DB.get('eyes');
+  const painDays = data.filter(e => e.pain).length;
+  const dropDays = data.filter(e => e.drop).length;
+  document.getElementById('eyeStats').innerHTML = `
+    <div><span style="font-size:22px;font-weight:700;color:var(--accent3)">${painDays}</span><br><span style="font-size:12px;color:var(--text-muted)">통증일</span></div>
+    <div><span style="font-size:22px;font-weight:700;color:var(--accent2)">${dropDays}</span><br><span style="font-size:12px;color:var(--text-muted)">안약일</span></div>
+    <div><span style="font-size:22px;font-weight:700">${data.length}</span><br><span style="font-size:12px;color:var(--text-muted)">기록일</span></div>
+  `;
+  const tbody = document.getElementById('eyeTable');
+  const empty = document.getElementById('eyeEmpty');
+  const desc = [...data].sort((a,b) => b.date.localeCompare(a.date));
+  if (desc.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  tbody.innerHTML = desc.map(r => `
+    <tr>
+      <td>${fmtDateLong(r.date)}</td>
+      <td>${r.pain ? '<span class="tag red">😣 통증</span>' : '<span style="color:var(--text-muted)">없음</span>'}</td>
+      <td>${r.pain ? `<strong style="color:var(--accent3)">${r.painLevel}</strong>/5` : '-'}</td>
+      <td>${r.drop ? '<span class="tag green">💧 안약</span>' : '<span style="color:var(--text-muted)">-</span>'}</td>
+      <td style="color:var(--text-muted);font-size:13px">${r.memo || ''}</td>
+      <td><button class="btn btn-danger" onclick="deleteEye(${r.id})">삭제</button></td>
+    </tr>
+  `).join('');
+}
+
+// ═══════════════════════════════════
+// FASTING
+// ═══════════════════════════════════
+let fastCalState = { year: new Date().getFullYear(), month: new Date().getMonth() };
+
+// 달력 날짜 클릭: 없음 → 단식안함(×) → 단식함(🌙) → 삭제(없음)
+function selectFastDate(dateStr) {
+  const data = DB.get('fastings');
+  const idx = data.findIndex(f => f.date === dateStr);
+  if (idx === -1) {
+    // 없음 → 단식안함
+    data.push({ id: Date.now(), date: dateStr, fasted: false });
+  } else if (!data[idx].fasted) {
+    // 단식안함 → 단식함
+    data[idx].fasted = true;
+  } else {
+    // 단식함 → 삭제
+    data.splice(idx, 1);
+  }
+  DB.set('fastings', data);
+  renderFasting();
+  notifyDataChanged();
+}
+
+function deleteFasting(id) {
+  if (!confirm('삭제?')) return;
+  DB.set('fastings', DB.get('fastings').filter(r => r.id !== id));
+  renderFasting();
+}
+
+function fastCalPrev() { fastCalState.month--; if (fastCalState.month < 0) { fastCalState.month = 11; fastCalState.year--; } renderFastCal(); }
+function fastCalNext() { fastCalState.month++; if (fastCalState.month > 11) { fastCalState.month = 0; fastCalState.year++; } renderFastCal(); }
+
+function renderFastCal() {
+  const fasts = DB.get('fastings');
+  renderCal('fastCal', 'fastCalTitle', fastCalState.year, fastCalState.month, (d) => {
+    const f = fasts.find(x => x.date === d);
+    if (!f) return '';
+    return f.fasted ? 'marked' : 'marked-pain';
+  }, null, 'selectFastDate');
+}
+
+function renderFasting() {
+  renderFastCal();
+  const data = DB.get('fastings');
+  const successDays = data.filter(f => f.fasted).length;
+  const failDays = data.filter(f => !f.fasted).length;
+  const totalDays = data.length;
+  const rate = totalDays ? Math.round(successDays/totalDays*100) : 0;
+  document.getElementById('fastStats').innerHTML = `
+    <div class="stat-chip"><div class="lbl">단식 성공</div><div class="val" style="color:var(--accent2)">${successDays}일</div></div>
+    <div class="stat-chip"><div class="lbl">단식 안 함</div><div class="val" style="color:var(--accent3)">${failDays}일</div></div>
+    <div class="stat-chip"><div class="lbl">성공률</div><div class="val" style="color:var(--accent4)">${rate}%</div></div>
+  `;
+  const tbody = document.getElementById('fastTable');
+  const empty = document.getElementById('fastEmpty');
+  const desc = [...data].sort((a,b) => b.date.localeCompare(a.date));
+  if (desc.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  tbody.innerHTML = desc.map(r => `
+    <tr>
+      <td>${fmtDateLong(r.date)}</td>
+      <td>${r.fasted ? '<span class="tag green">🌙 단식함</span>' : '<span class="tag red">✗ 단식안함</span>'}</td>
+      <td><button class="btn btn-danger" onclick="deleteFasting(${r.id})">삭제</button></td>
+    </tr>
+  `).join('');
+}
+
+// ═══════════════════════════════════
+// DRAG-AND-DROP NAV REORDER
+// ═══════════════════════════════════
+let dragSrc = null;
+
+function initDragSort() {
+  const nav = document.getElementById('sidebarNav');
+
+  function bindItem(item) {
+    item.addEventListener('dragstart', e => {
+      dragSrc = item;
+      item.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', '');
+    });
+    item.addEventListener('dragend', () => {
+      item.classList.remove('dragging');
+      nav.querySelectorAll('.nav-item').forEach(i => i.classList.remove('drag-over'));
+      saveNavOrder();
+    });
+    item.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (item !== dragSrc) {
+        nav.querySelectorAll('.nav-item').forEach(i => i.classList.remove('drag-over'));
+        item.classList.add('drag-over');
+      }
+    });
+    item.addEventListener('dragleave', () => {
+      item.classList.remove('drag-over');
+    });
+    item.addEventListener('drop', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (dragSrc && dragSrc !== item) {
+        const allItems = [...nav.querySelectorAll('.nav-item')];
+        const srcIdx = allItems.indexOf(dragSrc);
+        const dstIdx = allItems.indexOf(item);
+        if (srcIdx < dstIdx) {
+          nav.insertBefore(dragSrc, item.nextSibling);
+        } else {
+          nav.insertBefore(dragSrc, item);
+        }
+      }
+      item.classList.remove('drag-over');
+    });
+  }
+
+  nav.querySelectorAll('.nav-item').forEach(bindItem);
+}
+
+function saveNavOrder() {
+  const nav = document.getElementById('sidebarNav');
+  const order = [...nav.querySelectorAll('.nav-item')].map(i => i.dataset.page);
+  localStorage.setItem('navOrder', JSON.stringify(order));
+}
+
+function restoreNavOrder() {
+  const saved = localStorage.getItem('navOrder');
+  if (!saved) return;
+  try {
+    const order = JSON.parse(saved);
+    const nav = document.getElementById('sidebarNav');
+    order.forEach(page => {
+      const item = nav.querySelector(`[data-page="${page}"]`);
+      if (item) nav.appendChild(item);
+    });
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════
+// ANALYSIS
+// ═══════════════════════════════════
+// ═══════════════════════════════════
+// SLEEP
+// ═══════════════════════════════════
+let sleepCalState = { year: new Date().getFullYear(), month: new Date().getMonth() };
+let selectedSleepDate = null;
+let sleepCharts = {};
+
+function renderSleepCal() {
+  const sleeps = DB.get('sleeps');
+  renderCal('sleepCal', 'sleepCalTitle', sleepCalState.year, sleepCalState.month,
+    (d) => {
+      const s = sleeps.find(x => x.date === d);
+      return s && s.score ? sleepMarkClass(s.score) : '';
+    },
+    selectedSleepDate, 'selectSleepDate');
+}
+
+function selectSleepDate(dateStr) {
+  selectedSleepDate = (selectedSleepDate === dateStr) ? null : dateStr;
+  const sleeps = DB.get('sleeps');
+  const s = sleeps.find(x => x.date === dateStr);
+  const detail = document.getElementById('sleepCalDetail');
+  if (!selectedSleepDate || !s || !s.score) {
+    detail.innerHTML = '';
+    renderSleepCal();
+    return;
+  }
+  detail.innerHTML = `
+    <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:10px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:${sleepScoreColor(s.score)}">${fmtDateLong(dateStr)} — ${s.score}점 (${s.quality})</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">
+        <div><span style="color:var(--text-muted)">수면시간</span> <b>${fmtDur(s.duration)}</b></div>
+        <div><span style="color:var(--text-muted)">필요수면</span> <b>${fmtDur(s.needed)}</b></div>
+        <div><span style="color:var(--text-muted)">취침</span> <b>${s.bedtime||'-'}</b></div>
+        <div><span style="color:var(--text-muted)">기상</span> <b>${s.wakeTime||'-'}</b></div>
+        <div><span style="color:var(--text-muted)">안정심박</span> <b>${s.rhr ? s.rhr+' bpm' : '-'}</b></div>
+        <div><span style="color:var(--text-muted)">HRV</span> <b>${s.hrv||'-'}</b></div>
+        <div><span style="color:var(--text-muted)">바디배터리</span> <b>${s.bodyBattery||'-'}</b></div>
+      </div>
+    </div>`;
+  renderSleepCal();
+}
+
+function renderSleep() {
+  const allSleeps = DB.get('sleeps').filter(s => s.score != null).sort((a,b) => a.date.localeCompare(b.date));
+  if (!allSleeps.length) {
+    document.getElementById('sleepStats').innerHTML = '<p style="color:var(--text-muted);font-size:13px">수면 데이터가 없습니다.</p>';
+    return;
+  }
+
+  const avgScore = Math.round(allSleeps.reduce((s,r) => s+r.score, 0) / allSleeps.length);
+  const avgDur = Math.round(allSleeps.reduce((s,r) => s+(r.duration||0), 0) / allSleeps.length);
+  const rhrArr = allSleeps.filter(r => r.rhr);
+  const avgRhr = rhrArr.length ? Math.round(rhrArr.reduce((s,r) => s+r.rhr, 0) / rhrArr.length) : null;
+  const hrvArr = allSleeps.filter(r => r.hrv);
+  const avgHrv = hrvArr.length ? Math.round(hrvArr.reduce((s,r) => s+r.hrv, 0) / hrvArr.length) : null;
+  const todaySleep = allSleeps.find(s => s.date === today());
+  const bbArr = allSleeps.filter(r => r.bodyBattery);
+  const avgBb = bbArr.length ? Math.round(bbArr.reduce((s,r) => s+r.bodyBattery, 0) / bbArr.length) : null;
+
+  // Stats row
+  document.getElementById('sleepStats').innerHTML = `
+    <div class="stat-chip">
+      <div class="lbl">오늘 수면점수</div>
+      <div class="val" style="color:${sleepScoreColor(todaySleep?.score)}">${todaySleep?.score ?? '-'}</div>
+      <div class="sub">${todaySleep?.quality ?? ''}</div>
+    </div>
+    <div class="stat-chip">
+      <div class="lbl">평균 수면점수</div>
+      <div class="val" style="color:${sleepScoreColor(avgScore)}">${avgScore}</div>
+      <div class="sub">${allSleeps.length}일 평균</div>
+    </div>
+    <div class="stat-chip">
+      <div class="lbl">평균 수면시간</div>
+      <div class="val">${Math.floor(avgDur/60)}<small style="font-size:14px">h</small>${avgDur%60}<small style="font-size:14px">m</small></div>
+      <div class="sub">목표 8h 기준</div>
+    </div>
+    <div class="stat-chip">
+      <div class="lbl">안정 시 심박</div>
+      <div class="val">${avgRhr ?? '-'}<small style="font-size:14px"> bpm</small></div>
+    </div>
+    <div class="stat-chip">
+      <div class="lbl">평균 HRV</div>
+      <div class="val">${avgHrv ?? '-'}</div>
+    </div>
+    ${avgBb != null ? `<div class="stat-chip">
+      <div class="lbl">바디 배터리</div>
+      <div class="val">${avgBb}</div>
+      <div class="sub">오늘 ${todaySleep?.bodyBattery ?? '-'}</div>
+    </div>` : ''}
+  `;
+
+  // Calendar
+  renderSleepCal();
+
+  // Recent 30 days for charts
+  const recent = allSleeps.slice(-30);
+
+  // Score chart
+  const sCtx = document.getElementById('sleepScoreChart');
+  if (sleepCharts.score) sleepCharts.score.destroy();
+  sleepCharts.score = new Chart(sCtx, {
+    type: 'bar',
+    data: {
+      labels: recent.map(s => fmtDate(s.date)),
+      datasets: [{
+        label: '수면점수',
+        data: recent.map(s => s.score),
+        backgroundColor: recent.map(s => s.score >= 85 ? 'rgba(94,216,164,0.75)' : s.score >= 75 ? 'rgba(124,106,247,0.75)' : s.score >= 65 ? 'rgba(247,194,106,0.75)' : 'rgba(247,106,106,0.75)'),
+        borderRadius: 3,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false },
+        annotation: { annotations: { line80: { type:'line', yMin:80, yMax:80, borderColor:'rgba(94,216,164,0.3)', borderWidth:1, borderDash:[4,2] } } }
+      },
+      scales: {
+        x: { ticks: { color:'#71717a', font:{size:9}, maxRotation:45 }, grid:{ display:false } },
+        y: { min:30, max:100, ticks:{ color:'#71717a', font:{size:10} }, grid:{ color:'rgba(255,255,255,0.05)' } }
+      }
+    }
+  });
+
+  // Duration chart
+  const dCtx = document.getElementById('sleepDurChart');
+  if (sleepCharts.dur) sleepCharts.dur.destroy();
+  sleepCharts.dur = new Chart(dCtx, {
+    type: 'bar',
+    data: {
+      labels: recent.map(s => fmtDate(s.date)),
+      datasets: [
+        {
+          label: '수면시간',
+          data: recent.map(s => s.duration ? +(s.duration/60).toFixed(1) : null),
+          backgroundColor: recent.map(s => (s.duration||0) >= (s.needed||480) ? 'rgba(94,216,164,0.65)' : 'rgba(247,194,106,0.65)'),
+          borderRadius: 3, order: 2,
+        },
+        {
+          label: '필요수면',
+          data: recent.map(s => s.needed ? +(s.needed/60).toFixed(1) : null),
+          type: 'line',
+          borderColor: 'rgba(124,106,247,0.6)',
+          backgroundColor: 'transparent',
+          pointRadius: 0, borderWidth: 1.5,
+          borderDash: [4,2], order: 1,
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels:{ color:'#71717a', font:{size:10}, boxWidth:12 } } },
+      scales: {
+        x: { ticks:{ color:'#71717a', font:{size:9}, maxRotation:45 }, grid:{ display:false } },
+        y: { ticks:{ color:'#71717a', font:{size:10}, callback: v => v+'h' }, grid:{ color:'rgba(255,255,255,0.05)' } }
+      }
+    }
+  });
+
+  // Quality + stats card
+  const qualCnt = { '매우 좋음':0, '좋음':0, '보통':0, '낮음':0 };
+  allSleeps.forEach(s => { if (qualCnt[s.quality] !== undefined) qualCnt[s.quality]++; });
+  const total = allSleeps.length;
+  const maxScore = Math.max(...allSleeps.map(s=>s.score));
+  const minScore = Math.min(...allSleeps.map(s=>s.score));
+  const maxDur = Math.max(...allSleeps.filter(s=>s.duration).map(s=>s.duration));
+  const minDur = Math.min(...allSleeps.filter(s=>s.duration).map(s=>s.duration));
+
+  document.getElementById('sleepQualCard').innerHTML = `
+    <div class="card-title">수면 품질 분포 & 지표</div>
+    <div style="margin-bottom:14px">
+      ${Object.entries(qualCnt).map(([q,c]) => {
+        const pct = total ? Math.round(c/total*100) : 0;
+        const col = (q==='매우 좋음'||q==='좋음') ? '#5ed8a4' : q==='보통' ? '#f7c26a' : '#f76a6a';
+        return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;font-size:12px">
+          <div style="width:62px;color:var(--text-muted)">${q}</div>
+          <div style="flex:1;background:var(--surface2);border-radius:4px;height:6px;overflow:hidden">
+            <div style="width:${pct}%;background:${col};height:100%;border-radius:4px;transition:width 0.4s"></div>
+          </div>
+          <div style="width:28px;text-align:right;color:var(--text-muted)">${c}일</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px">
+      <div style="background:var(--surface2);border-radius:6px;padding:8px">
+        <div style="color:var(--text-muted);margin-bottom:3px">최고 점수</div>
+        <div style="font-size:20px;font-weight:700;color:#5ed8a4">${maxScore}</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:6px;padding:8px">
+        <div style="color:var(--text-muted);margin-bottom:3px">최저 점수</div>
+        <div style="font-size:20px;font-weight:700;color:#f76a6a">${minScore}</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:6px;padding:8px">
+        <div style="color:var(--text-muted);margin-bottom:3px">최장 수면</div>
+        <div style="font-size:16px;font-weight:700;color:#5ed8a4">${fmtDur(maxDur)}</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:6px;padding:8px">
+        <div style="color:var(--text-muted);margin-bottom:3px">최단 수면</div>
+        <div style="font-size:16px;font-weight:700;color:#f76a6a">${fmtDur(minDur)}</div>
+      </div>
+    </div>
+    ${avgHrv != null ? `<div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:6px;font-size:12px">
+      <div style="color:var(--text-muted);margin-bottom:4px">HRV 트렌드</div>
+      <div>최근 7일 평균: <b style="color:#7c6af7">${Math.round(allSleeps.slice(-7).filter(s=>s.hrv).reduce((a,s)=>a+s.hrv,0)/allSleeps.slice(-7).filter(s=>s.hrv).length)}</b>
+       · 전체 평균: <b>${avgHrv}</b></div>
+    </div>` : ''}
+  `;
+
+  // Table - last 30
+  const sorted = [...allSleeps].reverse().slice(0, 30);
+  document.getElementById('sleepTable').innerHTML = `
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="color:var(--text-muted);border-bottom:1px solid var(--border)">
+            <th style="text-align:left;padding:6px 8px;font-weight:500">날짜</th>
+            <th style="padding:6px;font-weight:500">점수</th>
+            <th style="padding:6px;font-weight:500">품질</th>
+            <th style="padding:6px;font-weight:500">수면시간</th>
+            <th style="padding:6px;font-weight:500">취침</th>
+            <th style="padding:6px;font-weight:500">기상</th>
+            <th style="padding:6px;font-weight:500">안정HR</th>
+            <th style="padding:6px;font-weight:500">HRV</th>
+            <th style="padding:6px;font-weight:500">바디배터리</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${sorted.map(s => {
+            const suf = s.duration && s.needed ? (s.duration >= s.needed ? '' : ' ⚠️') : '';
+            const qcol = (s.quality==='좋음'||s.quality==='매우 좋음') ? '#5ed8a4' : s.quality==='보통' ? '#f7c26a' : '#f76a6a';
+            return `<tr style="border-bottom:1px solid rgba(255,255,255,0.04)">
+              <td style="padding:6px 8px">${fmtDate(s.date)}</td>
+              <td style="padding:6px;text-align:center;color:${sleepScoreColor(s.score)};font-weight:700">${s.score}</td>
+              <td style="padding:6px;text-align:center;color:${qcol}">${s.quality}</td>
+              <td style="padding:6px;text-align:center">${fmtDur(s.duration)}${suf}</td>
+              <td style="padding:6px;text-align:center">${s.bedtime||'-'}</td>
+              <td style="padding:6px;text-align:center">${s.wakeTime||'-'}</td>
+              <td style="padding:6px;text-align:center">${s.rhr ? s.rhr+' bpm' : '-'}</td>
+              <td style="padding:6px;text-align:center">${s.hrv||'-'}</td>
+              <td style="padding:6px;text-align:center">${s.bodyBattery||'-'}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+let analysisCharts = {};
+function renderAnalysis() {
+  const conds  = DB.get('conditions').sort((a,b) => a.date.localeCompare(b.date));
+  const eyes   = DB.get('eyes');
+  const fasts  = DB.get('fastings');
+  const supps  = DB.get('suppRecords');
+  const skins  = DB.get('skins');
+  const runs   = DB.get('runs');
+  const sleeps = DB.get('sleeps').filter(s => s.score != null);
+  // ───────────────────────────────────────────────────────────────
+  // MULTI-WINDOW ANALYSIS ENGINE
+  // ───────────────────────────────────────────────────────────────
+  // Maps
+  const eyeMap  = {}; eyes.forEach(e  => { eyeMap[e.date]  = e; });
+  const fastMap = {}; fasts.forEach(f => { fastMap[f.date] = f; });
+  const suppMap = {}; supps.forEach(s => { suppMap[s.date] = s; });
+  const skinMap = {}; skins.forEach(s => { skinMap[s.date] = s; });
+  const runMap  = {}; runs.forEach(r  => { runMap[r.date]  = r; });
+  const sleepMap= {}; sleeps.forEach(s=> { sleepMap[s.date]= s; });
+  const condMap = {}; conds.forEach(c => { condMap[c.date] = c; });
+  const mean2 = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null;
+
+  function shiftDate(dateStr, days) {
+    const d = new Date(dateStr + 'T00:00:00');
+    d.setDate(d.getDate() + days);
+    return d.toISOString().split('T')[0];
+  }
+
+  // Compute effect: split condition records by whether windowFn(date) is true
+  function computeEff(windowFn) {
+    const yes=[], no=[];
+    conds.forEach(c => { windowFn(c.date) ? yes.push(c.score) : no.push(c.score); });
+    const my = mean2(yes), mn = mean2(no);
+    return { avgYes:my, avgNo:mn, nYes:yes.length, nNo:no.length,
+             diff: (my!=null&&mn!=null) ? my-mn : null };
+  }
+
+  // Base factor functions: does factor F exist ON a given date?
+  const BASE = {
+    run:   d => !!runMap[d],
+    fast:  d => !!(fastMap[d]?.fasted),
+    alc:   d => !!(condMap[d]?.alcohol),
+    eye:   d => !!(eyeMap[d]?.pain),
+    mask:  d => !!(skinMap[d]?.mask),
+    sleep: d => sleepMap[d]?.score != null && sleepMap[d].score >= 75,
+    M:     d => !!(condMap[d]?.mBig),
+    m:     d => !!(condMap[d]?.mSmall),
+  };
+
+  // Window wrappers
+  // D0:  factor on the same day as condition record
+  // D1:  factor 1 day before
+  // D23: factor present on day-2 OR day-3 (2-3일 전 중 하나라도)
+  // D7:  factor present on ≥2 of the 7 days prior
+  const W = {
+    D0:  fn => date => fn(date),
+    D1:  fn => date => fn(shiftDate(date, -1)),
+    D23: fn => date => fn(shiftDate(date, -2)) || fn(shiftDate(date, -3)),
+    D7:  fn => date => { let c=0; for(let i=1;i<=7;i++) if(fn(shiftDate(date,-i))) c++; return c>=2; },
+  };
+
+  const WINDOWS = [
+    { key:'D0',  label:'당일',  sub:'오늘' },
+    { key:'D1',  label:'D-1',  sub:'어제' },
+    { key:'D23', label:'D2~3', sub:'2~3일 전' },
+    { key:'D7',  label:'D7',   sub:'최근 7일(≥2회)' },
+  ];
+
+  const FACTORS = [
+    { key:'run',  label:'🏃 러닝',       col:'#7c6af7' },
+    { key:'fast', label:'🌙 단식',        col:'#5ed8a4' },
+    { key:'alc',  label:'🍺 음주',        col:'#f7a26a' },
+    { key:'sleep',label:'🛌 수면(≥75점)', col:'#5ed8a4' },
+    { key:'eye',  label:'👁 눈 통증',     col:'#f76a6a' },
+    { key:'mask', label:'🧴 마스크팩',    col:'#a78bfa' },
+    { key:'M',    label:'M',             col:'#7c6af7'  },
+    { key:'m',    label:'m',             col:'#f7c26a'  },
+  ];
+
+  // Pre-compute all factor × window effects
+  const EFF = {}; // EFF[factorKey][windowKey]
+  FACTORS.forEach(f => {
+    EFF[f.key] = {};
+    WINDOWS.forEach(w => {
+      EFF[f.key][w.key] = computeEff(W[w.key](BASE[f.key]));
+    });
+  });
+
+  // 효과 크기 기준으로 정렬 (절대값 최대 효과 내림차순)
+  const MIN_SAMPLES = 3;
+  FACTORS.sort((a, b) => {
+    const maxA = Math.max(...WINDOWS.map(w => EFF[a.key][w.key].nYes >= MIN_SAMPLES ? Math.abs(EFF[a.key][w.key].diff ?? 0) : 0));
+    const maxB = Math.max(...WINDOWS.map(w => EFF[b.key][w.key].nYes >= MIN_SAMPLES ? Math.abs(EFF[b.key][w.key].diff ?? 0) : 0));
+    return maxB - maxA;
+  });
+
+  // ── [HERO] Multi-window table
+  const cellHtml = (e, isBest) => {
+    const insufficient = e.nYes < MIN_SAMPLES || e.nNo < MIN_SAMPLES;
+    if (e.diff === null || insufficient) {
+      return `<td style="padding:8px 10px;text-align:center">
+        <div style="font-size:12px;color:rgba(113,113,122,0.5)">${e.nYes > 0 ? (e.diff != null ? (e.diff>0?'+':'') + e.diff.toFixed(2) : '-') : '-'}</div>
+        <div style="font-size:10px;color:rgba(113,113,122,0.4)">${e.nYes}일↑</div>
+      </td>`;
+    }
+    const d = e.diff;
+    const col = d > 0.15 ? '#5ed8a4' : d < -0.15 ? '#f76a6a' : '#71717a';
+    const icon = d > 0.3 ? '↑↑' : d > 0.05 ? '↑' : d < -0.3 ? '↓↓' : d < -0.05 ? '↓' : '→';
+    const bold = isBest ? 'font-weight:700;font-size:14px' : 'font-weight:500;font-size:12px';
+    const bg   = isBest ? `background:rgba(${d>0?'94,216,164':'247,106,106'},0.1);border-radius:6px;` : '';
+    return `<td style="padding:8px 10px;text-align:center;${bg}">
+      <div style="${bold};color:${col}">${icon} ${d>0?'+':''}${d.toFixed(2)}</div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:2px">${e.nYes}/${e.nYes+e.nNo}일</div>
+    </td>`;
+  };
+
+  const miniBar = (fKey) => {
+    const barMax = 1.0;
+    return `<div style="display:flex;align-items:flex-end;gap:2px;height:28px">
+      ${WINDOWS.map(w => {
+        const d = EFF[fKey][w.key].diff;
+        if (d == null) return '<div style="width:10px;background:var(--surface2);border-radius:2px;height:4px;align-self:center"></div>';
+        const h = Math.max(Math.min(Math.abs(d)/barMax*28, 28), 3);
+        const col = d > 0 ? 'rgba(94,216,164,0.75)' : 'rgba(247,106,106,0.75)';
+        return `<div style="width:10px;height:${h}px;background:${col};border-radius:2px" title="${w.label}: ${d>0?'+':''}${d.toFixed(2)}"></div>`;
+      }).join('')}
+    </div>`;
+  };
+
+  // 데이터 안정성 등급
+  const nConds = conds.length;
+  const stability = nConds >= 30 ? { label:'안정', col:'#5ed8a4', pct:100 }
+    : nConds >= 14 ? { label:'보통', col:'#f7c26a', pct: Math.round(nConds/30*100) }
+    : { label:'부족', col:'#f76a6a', pct: Math.round(nConds/30*100) };
+
+  document.getElementById('analysisMultiWindow').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div class="card-title" style="margin-bottom:0">📊 시간창별 요인 분석</div>
+      <div style="font-size:11px;color:var(--text-muted)" id="analysisUpdateTime"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:8px 10px;background:var(--surface2);border-radius:8px">
+      <div style="font-size:12px;color:var(--text-muted);white-space:nowrap">데이터 ${nConds}일</div>
+      <div style="flex:1;background:var(--bg);border-radius:4px;height:6px;overflow:hidden">
+        <div style="width:${stability.pct}%;height:100%;background:${stability.col};border-radius:4px;transition:width 0.5s"></div>
+      </div>
+      <div style="font-size:11px;color:${stability.col};font-weight:600;white-space:nowrap">${stability.label} · 30일+ 권장</div>
+    </div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">
+      요인 있을 때 vs 없을 때 평균 컨디션 차이 &nbsp;·&nbsp;
+      <span style="color:#5ed8a4">↑ 긍정</span> &nbsp;
+      <span style="color:#f76a6a">↓ 부정</span> &nbsp;·&nbsp;
+      <span style="opacity:0.5">회색=샘플 부족(n&lt;3)</span>
+    </div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:520px">
+        <thead>
+          <tr style="border-bottom:2px solid var(--border)">
+            <th style="text-align:left;padding:8px 10px;color:var(--text-muted);font-weight:500;min-width:110px">요인</th>
+            ${WINDOWS.map(w => `
+              <th style="padding:8px 10px;text-align:center;color:var(--text-muted);font-weight:500">
+                <div style="font-size:12px;font-weight:600">${w.label}</div>
+                <div style="font-size:10px;margin-top:1px">${w.sub}</div>
+              </th>`).join('')}
+            <th style="padding:8px 10px;text-align:center;color:var(--text-muted);font-weight:500;width:60px">추세</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${FACTORS.map(f => {
+            const row = EFF[f.key];
+            const diffs = WINDOWS.map(w => row[w.key].diff).filter(d => d != null);
+            const maxAbs = diffs.length ? Math.max(...diffs.map(d => Math.abs(d))) : 0;
+            return `<tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
+              <td style="padding:8px 10px;font-weight:500">
+                <span style="border-left:3px solid ${f.col};padding-left:6px">${f.label}</span>
+              </td>
+              ${WINDOWS.map(w => {
+                const e = row[w.key];
+                const isBest = e.diff != null && Math.abs(e.diff) === maxAbs && maxAbs > 0.05;
+                return cellHtml(e, isBest);
+              }).join('')}
+              <td style="padding:8px 10px;text-align:center">${miniBar(f.key)}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div style="margin-top:12px;font-size:11px;color:var(--text-muted);line-height:1.8">
+      <b>당일</b>: 해당 요인이 있던 날의 컨디션 &nbsp;·&nbsp;
+      <b>D-1</b>: 전날 요인 → 오늘 컨디션 &nbsp;·&nbsp;
+      <b>D2~3</b>: 2~3일 전 중 하루라도 있으면 → 오늘 컨디션 &nbsp;·&nbsp;
+      <b>D7</b>: 최근 7일 중 2회 이상 있으면 → 오늘 컨디션
+    </div>
+  `;
+
+  // ── 인사이트 자동 생성
+  const insights = [];
+  FACTORS.forEach(f => {
+    const row = EFF[f.key];
+    const entries = WINDOWS.map(w => ({ w, e: row[w.key] })).filter(x => x.e.diff != null && x.e.nYes >= 2);
+    if (!entries.length) return;
+    const bestEntry = entries.reduce((a,b) => Math.abs(b.e.diff) > Math.abs(a.e.diff) ? b : a);
+    const d = bestEntry.e.diff;
+    if (Math.abs(d) < 0.15) return;
+    const col = d > 0 ? '#5ed8a4' : '#f76a6a';
+    const dir = d > 0 ? '긍정' : '부정';
+    insights.push({ abs: Math.abs(d), html: `<div style="padding:10px 12px;background:var(--surface2);border-radius:8px;font-size:12px">
+      <b>${f.label}</b> → <b style="color:${col}">${bestEntry.w.label}(${bestEntry.w.sub})</b> 시창에서 가장 큰 ${dir} 효과 <b style="color:${col}">${d>0?'+':''}${d.toFixed(2)}pts</b>
+    </div>` });
+  });
+
+  // 가장 큰 lag 효과 비교
+  const lagPatterns = FACTORS.map(f => {
+    const d0 = EFF[f.key]['D0'].diff, d1 = EFF[f.key]['D1'].diff, d7 = EFF[f.key]['D7'].diff;
+    if (d0 == null || d1 == null) return null;
+    const diff = Math.abs(d1) - Math.abs(d0);
+    return { f, d0, d1, d7, diff };
+  }).filter(Boolean).sort((a,b) => b.diff - a.diff);
+
+  if (lagPatterns.length && lagPatterns[0].diff > 0.15) {
+    const p = lagPatterns[0];
+    insights.push({ abs: p.diff, html: `<div style="padding:10px 12px;background:var(--surface2);border-radius:8px;font-size:12px">
+      ⏱ <b>${p.f.label}</b>은 당일보다 전날 효과가 더 큼 — 하루 지연 반응 가능성 (D0: ${p.d0>0?'+':''}${p.d0.toFixed(2)} vs D-1: ${p.d1>0?'+':''}${p.d1.toFixed(2)})
+    </div>` });
+  }
+
+  insights.sort((a,b) => b.abs - a.abs);
+  document.getElementById('analysisInsights').innerHTML = `
+    <div class="card-title" style="margin-bottom:10px">💡 인사이트</div>
+    ${insights.length
+      ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px">${insights.slice(0,6).map(x=>x.html).join('')}</div>`
+      : `<div style="color:var(--text-muted);font-size:13px">기록이 더 쌓이면 자동 인사이트가 생성됩니다.</div>`}
+  `;
+
+  // ── 요약 카드
+  const n = conds.length;
+  const avg = n ? mean2(conds.map(c=>c.score)).toFixed(2) : '-';
+  const best  = n ? Math.max(...conds.map(c=>c.score)) : '-';
+  const worst = n ? Math.min(...conds.map(c=>c.score)) : '-';
+  const r7 = conds.slice(-7), p7 = conds.slice(-14,-7);
+  const a7 = r7.length ? mean2(r7.map(c=>c.score)) : null;
+  const a7p= p7.length ? mean2(p7.map(c=>c.score)) : null;
+  const td = a7!=null&&a7p!=null ? (a7-a7p).toFixed(2) : null;
+  const tc = td > 0 ? '#5ed8a4' : td < 0 ? '#f76a6a' : '#71717a';
+  document.getElementById('analysisSummary').innerHTML = `
+    <div class="card-title">전체 요약</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">
+      <div style="text-align:center"><div style="font-size:10px;color:var(--text-muted)">기록</div><div style="font-size:26px;font-weight:700">${n}</div><div style="font-size:10px;color:var(--text-muted)">일</div></div>
+      <div style="text-align:center"><div style="font-size:10px;color:var(--text-muted)">평균</div><div style="font-size:26px;font-weight:700;color:var(--accent)">${avg}</div><div style="font-size:10px;color:var(--text-muted)">/5</div></div>
+      <div style="text-align:center"><div style="font-size:10px;color:var(--text-muted)">최고</div><div style="font-size:26px;font-weight:700;color:#5ed8a4">${best}</div></div>
+      <div style="text-align:center"><div style="font-size:10px;color:var(--text-muted)">최저</div><div style="font-size:26px;font-weight:700;color:#f76a6a">${worst}</div></div>
+    </div>
+    ${td!==null?`<div style="padding:10px 12px;background:rgba(${td>0?'94,216,164':td<0?'247,106,106':'113,113,122'},0.08);border:1px solid rgba(${td>0?'94,216,164':td<0?'247,106,106':'113,113,122'},0.2);border-radius:8px;font-size:12px">
+      <span style="color:${tc};font-weight:700">${td>0?'↑':'↓'} ${td>0?'+':''}${td}pts</span>
+      <span style="color:var(--text-muted);margin-left:8px">최근 7일 ${a7!=null?a7.toFixed(2):'-'} vs 이전 7일 ${a7p!=null?a7p.toFixed(2):'-'}</span>
+    </div>`:''}`;
+
+  // ── 트렌드 라인 차트
+  if (analysisCharts.trend) analysisCharts.trend.destroy();
+  const tData = conds.slice(-30);
+  analysisCharts.trend = new Chart(document.getElementById('analysisTrendChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: tData.map(c => fmtDate(c.date)),
+      datasets: [
+        { label:'컨디션', data: tData.map(c=>c.score), borderColor:'#7c6af7', backgroundColor:'rgba(124,106,247,0.08)',
+          pointBackgroundColor: tData.map(c=>scoreColor(c.score)), pointRadius:4, tension:0.3, fill:true, order:1 },
+        { label:'수면÷20', data: tData.map(c=>sleepMap[c.date]?.score!=null?+(sleepMap[c.date].score/20).toFixed(2):null),
+          borderColor:'rgba(94,216,164,0.5)', backgroundColor:'transparent', pointRadius:2, borderDash:[4,2],
+          tension:0.3, spanGaps:true, order:2 }
+      ]
+    },
+    options: { ...chartOpts(0,5),
+      plugins:{ legend:{ labels:{ color:'#71717a', font:{size:10}, boxWidth:12 } },
+        tooltip:{ callbacks:{ label: ctx => ctx.datasetIndex===1 ? `수면점수: ${(ctx.raw*20).toFixed(0)}` : `컨디션: ${ctx.raw}` } } }
+    }
+  });
+
+  // ── 분포 차트
+  if (analysisCharts.dist) analysisCharts.dist.destroy();
+  const distCount = [0,0,0,0,0];
+  conds.forEach(c => { if(c.score>=1&&c.score<=5) distCount[c.score-1]++; });
+  analysisCharts.dist = new Chart(document.getElementById('analysisDist').getContext('2d'), {
+    type:'bar', data:{ labels:['1 최악','2 나쁨','3 보통','4 좋음','5 최고'],
+      datasets:[{ data:distCount, backgroundColor:['#f76a6a','#f7a26a','#f7c26a','#7c6af7','#5ed8a4'], borderRadius:6 }] },
+    options:{ ...chartOpts(0), plugins:{ legend:{ display:false } } }
+  });
+
+  // ── M/m 비교 차트
+  const mGroups = {'M+m':[],'M만':[],'m만':[],'없음':[]};
+  conds.forEach(c => { const k = c.mBig&&c.mSmall?'M+m':c.mBig?'M만':c.mSmall?'m만':'없음'; mGroups[k].push(c.score); });
+  if (analysisCharts.m) analysisCharts.m.destroy();
+  analysisCharts.m = new Chart(document.getElementById('analysisMChart').getContext('2d'), {
+    type:'bar', data:{
+      labels: Object.keys(mGroups).map((k,i) => `${k} (${mGroups[k].length}일)`),
+      datasets:[{ data: Object.keys(mGroups).map(k=>mGroups[k].length?mean2(mGroups[k]).toFixed(2):0),
+        backgroundColor:['#7c6af7','#a78bfa','#5ed8a4','rgba(113,113,122,0.4)'], borderRadius:6 }]
+    },
+    options:{ ...chartOpts(0,5), plugins:{ legend:{ display:false } } }
+  });
+
+  // ── 수면 × 컨디션 상세
+  const sleepBands = [
+    { label:'우수 85+', min:85, max:100, col:'#5ed8a4' },
+    { label:'좋음 75~84', min:75, max:84, col:'#7c6af7' },
+    { label:'보통 65~74', min:65, max:74, col:'#f7c26a' },
+    { label:'낮음 <65',  min:0,  max:64, col:'#f76a6a' },
+  ];
+  let sh = '<div style="margin-bottom:14px">';
+  sleepBands.forEach(b => {
+    const days = sleeps.filter(s=>s.score>=b.min&&s.score<=b.max);
+    const mc = days.map(s=>conds.find(c=>c.date===s.date)).filter(Boolean);
+    const av = mc.length ? mean2(mc.map(c=>c.score)).toFixed(2) : null;
+    sh += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px">
+      <div style="width:76px;color:var(--text-muted)">${b.label}</div>
+      <div style="flex:1;background:var(--surface2);border-radius:3px;height:14px;overflow:hidden">
+        ${av?`<div style="width:${(parseFloat(av)/5*100).toFixed(0)}%;height:100%;background:${b.col};border-radius:3px;transition:width 0.5s"></div>`:''}
+      </div>
+      <div style="width:90px;text-align:right">
+        ${av?`<b style="color:${b.col}">${av}</b> <span style="color:var(--text-muted)">(${mc.length}일)</span>`:'<span style="color:var(--text-muted)">-</span>'}
+      </div>
+    </div>`;
+  });
+  sh += '</div>';
+
+  // 전날 수면 → 오늘 컨디션 (D-1 수면)
+  const pgood=[], ppoor=[];
+  conds.forEach(c => {
+    const ys = sleepMap[shiftDate(c.date,-1)];
+    if (ys?.score >= 80) pgood.push(c.score);
+    else if (ys?.score < 65) ppoor.push(c.score);
+  });
+  const mg=mean2(pgood), mp=mean2(ppoor);
+  sh += `<div style="font-size:12px;color:var(--text-muted);font-weight:600;margin-bottom:6px">전날(D-1) 수면 → 오늘 컨디션</div>
+    <div style="font-size:12px;background:var(--surface2);border-radius:6px;padding:10px;line-height:1.9">
+      전날 수면 <b style="color:#5ed8a4">좋음(80+)</b>: <b>${mg!=null?mg.toFixed(2):'-'}</b> (${pgood.length}일)<br>
+      전날 수면 <b style="color:#f76a6a">낮음(&lt;65)</b>: <b>${mp!=null?mp.toFixed(2):'-'}</b> (${ppoor.length}일)
+      ${mg!=null&&mp!=null?`<br>차이: <b style="color:${mg>mp?'#5ed8a4':'#f76a6a'}">${mg>mp?'+':''}${(mg-mp).toFixed(2)}pts</b>`:''}
+    </div>`;
+  document.getElementById('analysisSleep').innerHTML = sh;
+
+  // ── 마지막 업데이트 시각 표시
+  const tsEl = document.getElementById('analysisUpdateTime');
+  if (tsEl) {
+    const now = new Date();
+    tsEl.textContent = `업데이트 ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+  }
+
+  // ── (compat stub: remove old divs if present)
+  ['analysisFactors','analysisCorr','analysisPrev'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.innerHTML = '';
+  });
+
+}
+
+// ═══════════════════════════════════
+// HOME DRAG SORT
+// ═══════════════════════════════════
+let homeDragSrc = null;
+
+function initHomeDrag() {
+  const grid = document.getElementById('homeGrid');
+  function bindCard(card) {
+    card.addEventListener('dragstart', e => {
+      homeDragSrc = card;
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+      grid.querySelectorAll('.home-card-wrap').forEach(c => c.classList.remove('drag-over'));
+      saveHomeOrder();
+    });
+    card.addEventListener('dragover', e => {
+      e.preventDefault();
+      if (card !== homeDragSrc) card.classList.add('drag-over');
+    });
+    card.addEventListener('dragleave', () => card.classList.remove('drag-over'));
+    card.addEventListener('drop', e => {
+      e.preventDefault();
+      card.classList.remove('drag-over');
+      if (!homeDragSrc || homeDragSrc === card) return;
+      const cards = [...grid.querySelectorAll('.home-card-wrap')];
+      const srcIdx = cards.indexOf(homeDragSrc);
+      const dstIdx = cards.indexOf(card);
+      if (srcIdx < dstIdx) grid.insertBefore(homeDragSrc, card.nextSibling);
+      else grid.insertBefore(homeDragSrc, card);
+    });
+  }
+  grid.querySelectorAll('.home-card-wrap').forEach(bindCard);
+}
+
+function saveHomeOrder() {
+  const grid = document.getElementById('homeGrid');
+  const order = [...grid.querySelectorAll('.home-card-wrap')].map(c => c.dataset.key);
+  localStorage.setItem('homeOrder', JSON.stringify(order));
+}
+
+function restoreHomeOrder() {
+  const saved = localStorage.getItem('homeOrder');
+  if (!saved) return;
+  try {
+    const order = JSON.parse(saved);
+    const grid = document.getElementById('homeGrid');
+    order.forEach(key => {
+      const el = grid.querySelector(`[data-key="${key}"]`);
+      if (el) grid.appendChild(el);
+    });
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════
+// INIT
+// ═══════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  // ── 인바디 데이터 (InBody-20260722.xlsx 전체 이식) ──
+  if (!localStorage.getItem('inbodyXlsxLoaded')) {
+    const inbodySeed = [
+      {id:5000, date:'2026-07-22', weight:76.1, muscle:38.2, fat:12.7, bmi:25.1, bmr:1805, score:90},
+      {id:5001, date:'2026-06-27', weight:77,   muscle:38.2, fat:13.1, bmi:25.4, bmr:1816, score:90},
+      {id:5002, date:'2026-05-24', weight:75.5, muscle:38.0, fat:12.0, bmi:24.9, bmr:1805, score:90},
+      {id:5003, date:'2026-03-02', weight:74.0, muscle:36.9, fat:13.1, bmi:24.4, bmr:1760, score:88},
+      {id:5004, date:'2025-12-29', weight:74.9, muscle:38.1, fat:11.6, bmi:24.7, bmr:1800, score:90},
+      {id:5005, date:'2025-11-14', weight:75.0, muscle:37.8, fat:12.0, bmi:24.8, bmr:1795, score:89},
+      {id:5006, date:'2025-08-02', weight:72.9, muscle:37.3, fat:10.6, bmi:24.1, bmr:1777, score:89},
+      {id:5007, date:'2025-07-11', weight:71.5, muscle:36.5, fat:10.9, bmi:23.6, bmr:1745, score:87},
+      {id:5008, date:'2025-06-12', weight:72.7, muscle:37.6, fat:9.7,  bmi:24.0, bmr:1788, score:89},
+      {id:5009, date:'2025-04-07', weight:70.5, muscle:37.1, fat:8.3,  bmi:23.3, bmr:1766, score:88},
+      {id:5010, date:'2025-03-01', weight:70.5, muscle:36.6, fat:9.4,  bmi:23.3, bmr:1750, score:87},
+      {id:5011, date:'2025-01-24', weight:68.2, muscle:34.8, fat:10.5, bmi:22.5, bmr:1689, score:84},
+      {id:5012, date:'2024-12-31', weight:68.5, muscle:35.7, fat:9.0,  bmi:22.6, bmr:1716, score:86},
+      {id:5013, date:'2024-11-30', weight:68.8, muscle:35.7, fat:9.3,  bmi:22.7, bmr:1717, score:86},
+      {id:5014, date:'2024-11-01', weight:72.7, muscle:37.1, fat:10.7, bmi:24.0, bmr:1773, score:88},
+      {id:5015, date:'2024-10-20', weight:73.1, muscle:36.1, fat:13.5, bmi:24.1, bmr:1735, score:87},
+      {id:5016, date:'2024-10-01', weight:73.3, muscle:37.9, fat:10.2, bmi:24.2, bmr:1792, score:89},
+      {id:5017, date:'2024-09-20', weight:73.5, muscle:36.0, fat:14.5, bmi:24.3, bmr:1728, score:86},
+      {id:5018, date:'2024-08-30', weight:73.2, muscle:35.8, fat:14.8, bmi:24.2, bmr:1717, score:86},
+      {id:5019, date:'2024-08-13', weight:73.2, muscle:36.4, fat:12.9, bmi:24.2, bmr:1747, score:87},
+      {id:5020, date:'2024-08-02', weight:73.7, muscle:36.4, fat:13.5, bmi:24.3, bmr:1747, score:87},
+      {id:5021, date:'2024-07-19', weight:72.1, muscle:36.1, fat:12.7, bmi:23.8, bmr:1729, score:86},
+      {id:5022, date:'2024-07-12', weight:72.1, muscle:36.7, fat:11.5, bmi:23.8, bmr:1748},
+      {id:5023, date:'2024-06-27', weight:72.7, muscle:35.3, fat:15.0, bmi:24.0, bmr:1705, score:85},
+      {id:5024, date:'2024-06-15', weight:72.3, muscle:35.2, fat:14.7, bmi:23.9, bmr:1702, score:85},
+      {id:5025, date:'2024-06-03', weight:71.1, muscle:34.9, fat:14.0, bmi:23.5, bmr:1691, score:85},
+      {id:5026, date:'2024-05-10', weight:72.3, muscle:35.8, fat:13.5, bmi:23.9, bmr:1721, score:86},
+      {id:5027, date:'2024-04-24', weight:70.9, muscle:35.3, fat:12.8, bmi:23.4, bmr:1706, score:85},
+      {id:5028, date:'2024-03-17', weight:70.2, muscle:35.0, fat:12.5, bmi:23.2, bmr:1697, score:85},
+      {id:5029, date:'2024-02-08', weight:70.8, muscle:35.4, fat:12.4, bmi:23.4, bmr:1709, score:85},
+      {id:5030, date:'2024-01-04', weight:71.7, muscle:34.9, fat:14.4, bmi:23.7, bmr:1695, score:85},
+      {id:5031, date:'2023-11-25', weight:73.4, muscle:34.8, fat:16.7, bmi:24.2, bmr:1691, score:83},
+      {id:5032, date:'2023-08-22', weight:71.2, muscle:33.9, fat:16.0, bmi:23.8, bmr:1661, score:83},
+      {id:5033, date:'2023-05-26', weight:71.4, muscle:35.6, fat:13.5, bmi:23.6, bmr:1705},
+      {id:5034, date:'2023-04-24', weight:71.0, muscle:35.6, fat:12.6, bmi:23.5, bmr:1711},
+      {id:5035, date:'2023-02-23', weight:73.5, muscle:36.1, fat:14.2, bmi:24.3, bmr:1733},
+      {id:5036, date:'2022-12-18', weight:73.9, muscle:35.0, fat:17.7, bmi:24.7, bmr:1683},
+      {id:5037, date:'2022-09-01', weight:73.9, muscle:35.8, fat:15.1, bmi:24.7, bmr:1724},
+      {id:5038, date:'2022-06-20', weight:73.4, muscle:36.5, fat:13.2, bmi:24.5, bmr:1746},
+      {id:5039, date:'2022-05-11', weight:72.0, muscle:35.3, fat:14.5, bmi:24.1, bmr:1701},
+      {id:5040, date:'2022-04-17', weight:72.5, muscle:35.5, fat:14.6, bmi:24.2, bmr:1707},
+      {id:5041, date:'2022-03-10', weight:71.5, muscle:35.3, fat:13.8, bmi:23.8, bmr:1701},
+      {id:5042, date:'2022-02-03', weight:72.5, muscle:35.5, fat:14.6, bmi:24.1, bmr:1707},
+      {id:5043, date:'2021-12-23', weight:72.5, muscle:34.8, fat:15.7, bmi:24.2, bmr:1690, score:85},
+      {id:5044, date:'2021-10-01', weight:70.5, muscle:35.3, fat:12.8, bmi:23.6, bmr:1698},
+      {id:5045, date:'2021-08-29', weight:70.1, muscle:34.8, fat:13.6, bmi:23.4, bmr:1679},
+    ];
+    const ibExisting = DB.get('inbody');
+    inbodySeed.forEach(rec => {
+      const idx = ibExisting.findIndex(r => r.date === rec.date);
+      if (idx >= 0) ibExisting[idx] = { ...ibExisting[idx], ...rec };
+      else ibExisting.push(rec);
+    });
+    DB.set('inbody', ibExisting);
+    localStorage.setItem('inbodyXlsxLoaded', '1');
+  }
+
+  // ── 컨디션 점수 마이그레이션 (1-10 → 1-5, 최초 1회) ──
+  if (!localStorage.getItem('condScoreMigrated')) {
+    const map10to5 = s => s <= 2 ? 1 : s <= 4 ? 2 : s === 5 ? 3 : s <= 8 ? 4 : 5;
+    const migData = DB.get('conditions').map(c => ({ ...c, score: map10to5(parseInt(c.score)) }));
+    DB.set('conditions', migData);
+    localStorage.setItem('condScoreMigrated', '1');
+  }
+
+  // ── 컨디션 alcohol 필드 마이그레이션 (최초 1회) ──
+  if (!localStorage.getItem('condAlcoholMigrated')) {
+    const migConds = DB.get('conditions').map(c => ({ alcohol: false, ...c }));
+    DB.set('conditions', migConds);
+    localStorage.setItem('condAlcoholMigrated', '1');
+  }
+
+  // ── SEED DATA ──
+  const td = today();
+
+  // 피부케어 마스크팩 7/13~18 + 7/20~22
+  const skinSeed = DB.get('skins');
+  const skinEntries = [
+    { date: '2026-07-13', status: '' }, { date: '2026-07-14', status: '' },
+    { date: '2026-07-15', status: '' }, { date: '2026-07-16', status: '' },
+    { date: '2026-07-17', status: '' }, { date: '2026-07-18', status: '' },
+    { date: '2026-07-20', status: '파티온팩' },
+    { date: '2026-07-21', status: 'Azelaic Acid팩' },
+    { date: '2026-07-22', status: '파티온팩' },
+  ];
+  skinEntries.forEach((e, i) => {
+    const idx = skinSeed.findIndex(s => s.date === e.date);
+    const rec = { id: 1000 + i, date: e.date, mask: true, status: e.status, memo: '' };
+    if (idx >= 0) skinSeed[idx] = { ...skinSeed[idx], ...rec };
+    else skinSeed.push(rec);
+  });
+  DB.set('skins', skinSeed);
+
+  // 영양제: 크레아틴 7/1~오늘, 오늘은 오메가3·유산균도 추가
+  const suppTypes = DB.getObj('suppTypes', { list: [] });
+  ['크레아틴','오메가3','유산균','오메가3(x3)'].forEach(s => { if (!suppTypes.list.includes(s)) suppTypes.list.push(s); });
+  DB.setObj('suppTypes', suppTypes);
+  const suppRecords = DB.get('suppRecords');
+  const start = new Date('2026-07-01');
+  const end = new Date(td);
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const dateStr = d.toISOString().split('T')[0];
+    const list = dateStr === '2026-07-22' ? ['크레아틴','유산균','오메가3(x3)']
+              : dateStr === '2026-07-24' ? ['크레아틴','오메가3(x3)','비타민C']
+              : dateStr === '2026-07-27' ? ['크레아틴','오메가3','유산균']
+              : dateStr <= '2026-07-19'  ? ['크레아틴','오메가3','유산균']
+              : ['크레아틴'];
+    const idx = suppRecords.findIndex(r => r.date === dateStr);
+    if (idx >= 0) suppRecords[idx].list = list;
+    else suppRecords.push({ id: 2000 + suppRecords.length, date: dateStr, list, memo: '' });
+  }
+  DB.set('suppRecords', suppRecords);
+
+  // 눈 상태: 오늘 통증 + 안약
+  const eyeSeed = DB.get('eyes');
+  const eyeIdx = eyeSeed.findIndex(e => e.date === '2026-07-22');
+  const eyeRec = { id: 3000, date: '2026-07-22', pain: true, drop: true, painLevel: 0, memo: '' };
+  if (eyeIdx >= 0) eyeSeed[eyeIdx] = { ...eyeSeed[eyeIdx], ...eyeRec };
+  else eyeSeed.push(eyeRec);
+  DB.set('eyes', eyeSeed);
+
+  // 컨디션: 오늘 4점, 7/20 M체크
+  const condSeed = DB.get('conditions');
+  [
+    { date: '2026-07-20', score: 3, mBig: true,  mSmall: false, alcohol: false },
+    { date: '2026-07-22', score: 4, mBig: false, mSmall: false, alcohol: true  },
+  ].forEach((rec, i) => {
+    const idx = condSeed.findIndex(c => c.date === rec.date);
+    const full = { id: 4000 + i, tags: [], memo: '', ...rec };
+    if (idx >= 0) condSeed[idx] = { ...condSeed[idx], ...full };
+    else condSeed.push(full);
+  });
+  DB.set('conditions', condSeed);
+  // ── 7/13 러닝 데이터 수정 (최초 1회) ──
+  if (!localStorage.getItem('run0713Fixed')) {
+    const runs0713 = DB.get('runs');
+    const idx0713  = runs0713.findIndex(r => r.date === '2026-07-13');
+    if (idx0713 >= 0) {
+      runs0713[idx0713].time = '1:33:27';
+      runs0713[idx0713].hr   = '';
+    }
+    DB.set('runs', runs0713);
+    localStorage.setItem('run0713Fixed', '1');
+  }
+
+  // ── 수면 데이터 시드 (Garmin Connect, 최초 1회) ──
+  if (!localStorage.getItem('sleepGarminSeeded')) {
+    const garminSleeps = [
+    {"date":"2026-05-18","score":93,"rhr":45,"bodyBattery":39,"hrv":null,"quality":"매우 좋음","duration":488,"needed":480,"bedtime":"11:59 PM","wakeTime":"8:07 AM"},
+    {"date":"2026-05-19","score":56,"rhr":51,"bodyBattery":38,"hrv":null,"quality":"낮음","duration":334,"needed":520,"bedtime":"2:37 AM","wakeTime":"8:20 AM"},
+    {"date":"2026-05-20","score":60,"rhr":53,"bodyBattery":47,"hrv":null,"quality":"보통","duration":286,"needed":510,"bedtime":"2:15 AM","wakeTime":"7:05 AM"},
+    {"date":"2026-05-21","score":91,"rhr":46,"bodyBattery":88,"hrv":58,"quality":"매우 좋음","duration":482,"needed":540,"bedtime":"10:38 PM","wakeTime":"6:57 AM"},
+    {"date":"2026-05-22","score":80,"rhr":48,"bodyBattery":77,"hrv":59,"quality":"좋음","duration":388,"needed":480,"bedtime":"12:21 AM","wakeTime":"6:54 AM"},
+    {"date":"2026-05-23","score":53,"rhr":54,"bodyBattery":32,"hrv":56,"quality":"낮음","duration":464,"needed":500,"bedtime":"2:44 AM","wakeTime":"11:06 AM"},
+    {"date":"2026-05-24","score":63,"rhr":51,"bodyBattery":64,"hrv":55,"quality":"보통","duration":388,"needed":540,"bedtime":"2:24 AM","wakeTime":"9:00 AM"},
+    {"date":"2026-05-25","score":76,"rhr":50,"bodyBattery":65,"hrv":54,"quality":"보통","duration":382,"needed":510,"bedtime":"12:30 AM","wakeTime":"6:52 AM"},
+    {"date":"2026-05-26","score":73,"rhr":53,"bodyBattery":45,"hrv":53,"quality":"보통","duration":389,"needed":510,"bedtime":"12:29 AM","wakeTime":"7:01 AM"},
+    {"date":"2026-05-27","score":69,"rhr":49,"bodyBattery":66,"hrv":53,"quality":"보통","duration":362,"needed":430,"bedtime":"1:22 AM","wakeTime":"7:24 AM"},
+    {"date":"2026-05-28","score":84,"rhr":52,"bodyBattery":65,"hrv":51,"quality":"좋음","duration":458,"needed":480,"bedtime":"11:50 PM","wakeTime":"7:31 AM"},
+    {"date":"2026-05-29","score":97,"rhr":48,"bodyBattery":91,"hrv":51,"quality":"매우 좋음","duration":513,"needed":480,"bedtime":"11:46 PM","wakeTime":"8:20 AM"},
+    {"date":"2026-05-30","score":69,"rhr":48,"bodyBattery":63,"hrv":54,"quality":"보통","duration":505,"needed":460,"bedtime":"12:34 AM","wakeTime":"9:28 AM"},
+    {"date":"2026-05-31","score":72,"rhr":50,"bodyBattery":57,"hrv":53,"quality":"보통","duration":459,"needed":480,"bedtime":"1:30 AM","wakeTime":"9:29 AM"},
+    {"date":"2026-06-01","score":43,"rhr":54,"bodyBattery":25,"hrv":51,"quality":"낮음","duration":244,"needed":480,"bedtime":"3:03 AM","wakeTime":"7:17 AM"},
+    {"date":"2026-06-02","score":78,"rhr":46,"bodyBattery":82,"hrv":52,"quality":"보통","duration":445,"needed":540,"bedtime":"11:10 PM","wakeTime":"6:55 AM"},
+    {"date":"2026-06-03","score":66,"rhr":53,"bodyBattery":50,"hrv":52,"quality":"보통","duration":332,"needed":520,"bedtime":"2:28 AM","wakeTime":"8:17 AM"},
+    {"date":"2026-06-04","score":48,"rhr":54,"bodyBattery":31,"hrv":50,"quality":"낮음","duration":327,"needed":540,"bedtime":"1:26 AM","wakeTime":"6:59 AM"},
+    {"date":"2026-06-05","score":78,"rhr":48,"bodyBattery":84,"hrv":49,"quality":"보통","duration":629,"needed":520,"bedtime":"8:21 PM","wakeTime":"7:44 AM"},
+    {"date":"2026-06-06","score":78,"rhr":51,"bodyBattery":55,"hrv":49,"quality":"보통","duration":390,"needed":480,"bedtime":"3:03 AM","wakeTime":"9:40 AM"},
+    {"date":"2026-06-07","score":52,"rhr":52,"bodyBattery":38,"hrv":49,"quality":"낮음","duration":249,"needed":450,"bedtime":"4:39 AM","wakeTime":"9:00 AM"},
+    {"date":"2026-06-08","score":86,"rhr":47,"bodyBattery":88,"hrv":51,"quality":"좋음","duration":504,"needed":540,"bedtime":"10:24 PM","wakeTime":"7:04 AM"},
+    {"date":"2026-06-09","score":76,"rhr":51,"bodyBattery":56,"hrv":50,"quality":"보통","duration":419,"needed":500,"bedtime":"12:21 AM","wakeTime":"7:33 AM"},
+    {"date":"2026-06-10","score":73,"rhr":52,"bodyBattery":55,"hrv":51,"quality":"보통","duration":370,"needed":500,"bedtime":"1:25 AM","wakeTime":"7:49 AM"},
+    {"date":"2026-06-11","score":73,"rhr":49,"bodyBattery":66,"hrv":52,"quality":"보통","duration":420,"needed":520,"bedtime":"11:43 PM","wakeTime":"7:16 AM"},
+    {"date":"2026-06-12","score":62,"rhr":54,"bodyBattery":40,"hrv":51,"quality":"보통","duration":352,"needed":450,"bedtime":"3:11 AM","wakeTime":"9:10 AM"},
+    {"date":"2026-06-13","score":78,"rhr":54,"bodyBattery":71,"hrv":51,"quality":"보통","duration":553,"needed":520,"bedtime":"2:20 AM","wakeTime":"12:32 PM"},
+    {"date":"2026-06-14","score":80,"rhr":50,"bodyBattery":44,"hrv":52,"quality":"좋음","duration":424,"needed":480,"bedtime":"2:24 AM","wakeTime":"9:30 AM"},
+    {"date":"2026-06-15","score":66,"rhr":51,"bodyBattery":48,"hrv":51,"quality":"보통","duration":448,"needed":480,"bedtime":"12:11 AM","wakeTime":"7:54 AM"},
+    {"date":"2026-06-16","score":66,"rhr":50,"bodyBattery":62,"hrv":51,"quality":"보통","duration":606,"needed":440,"bedtime":"10:04 PM","wakeTime":"9:24 AM"},
+    {"date":"2026-06-17","score":83,"rhr":52,"bodyBattery":48,"hrv":50,"quality":"좋음","duration":448,"needed":480,"bedtime":"12:23 AM","wakeTime":"7:58 AM"},
+    {"date":"2026-06-18","score":78,"rhr":49,"bodyBattery":70,"hrv":50,"quality":"보통","duration":491,"needed":480,"bedtime":"11:45 PM","wakeTime":"8:25 AM"},
+    {"date":"2026-06-19","score":58,"rhr":55,"bodyBattery":22,"hrv":50,"quality":"낮음","duration":392,"needed":420,"bedtime":"3:05 AM","wakeTime":"9:40 AM"},
+    {"date":"2026-06-20","score":85,"rhr":53,"bodyBattery":67,"hrv":50,"quality":"좋음","duration":596,"needed":480,"bedtime":"1:00 AM","wakeTime":"10:57 AM"},
+    {"date":"2026-06-21","score":88,"rhr":51,"bodyBattery":67,"hrv":49,"quality":"좋음","duration":540,"needed":430,"bedtime":"12:44 AM","wakeTime":"9:56 AM"},
+    {"date":"2026-06-22","score":41,"rhr":55,"bodyBattery":19,"hrv":48,"quality":"낮음","duration":226,"needed":440,"bedtime":"2:54 AM","wakeTime":"7:10 AM"},
+    {"date":"2026-06-23","score":83,"rhr":54,"bodyBattery":71,"hrv":48,"quality":"좋음","duration":509,"needed":430,"bedtime":"10:47 PM","wakeTime":"7:28 AM"},
+    {"date":"2026-06-24","score":81,"rhr":50,"bodyBattery":55,"hrv":48,"quality":"좋음","duration":434,"needed":480,"bedtime":"12:42 AM","wakeTime":"7:59 AM"},
+    {"date":"2026-06-25","score":82,"rhr":48,"bodyBattery":78,"hrv":48,"quality":"좋음","duration":476,"needed":420,"bedtime":"1:39 AM","wakeTime":"9:45 AM"},
+    {"date":"2026-06-26","score":79,"rhr":50,"bodyBattery":52,"hrv":49,"quality":"보통","duration":502,"needed":420,"bedtime":"12:53 AM","wakeTime":"9:19 AM"},
+    {"date":"2026-06-27","score":85,"rhr":52,"bodyBattery":56,"hrv":49,"quality":"좋음","duration":505,"needed":420,"bedtime":"1:29 AM","wakeTime":"10:11 AM"},
+    {"date":"2026-06-28","score":86,"rhr":51,"bodyBattery":69,"hrv":50,"quality":"좋음","duration":534,"needed":440,"bedtime":"5:59 AM","wakeTime":"3:10 PM"},
+    {"date":"2026-06-29","score":81,"rhr":51,"bodyBattery":45,"hrv":50,"quality":"좋음","duration":469,"needed":480,"bedtime":"6:00 AM","wakeTime":"2:00 PM"},
+    {"date":"2026-06-30","score":43,"rhr":52,"bodyBattery":11,"hrv":50,"quality":"낮음","duration":221,"needed":520,"bedtime":"9:03 AM","wakeTime":"12:48 PM"},
+    {"date":"2026-07-01","score":58,"rhr":53,"bodyBattery":46,"hrv":50,"quality":"낮음","duration":444,"needed":540,"bedtime":"10:50 PM","wakeTime":"6:51 AM"},
+    {"date":"2026-07-02","score":79,"rhr":47,"bodyBattery":76,"hrv":51,"quality":"보통","duration":414,"needed":530,"bedtime":"11:39 PM","wakeTime":"6:40 AM"},
+    {"date":"2026-07-03","score":82,"rhr":52,"bodyBattery":71,"hrv":51,"quality":"좋음","duration":481,"needed":510,"bedtime":"1:18 AM","wakeTime":"9:44 AM"},
+    {"date":"2026-07-04","score":89,"rhr":49,"bodyBattery":65,"hrv":52,"quality":"좋음","duration":555,"needed":450,"bedtime":"11:20 PM","wakeTime":"8:56 AM"},
+    {"date":"2026-07-05","score":80,"rhr":52,"bodyBattery":55,"hrv":52,"quality":"좋음","duration":392,"needed":440,"bedtime":"4:33 AM","wakeTime":"11:07 AM"},
+    {"date":"2026-07-06","score":57,"rhr":51,"bodyBattery":40,"hrv":54,"quality":"낮음","duration":289,"needed":500,"bedtime":"1:44 AM","wakeTime":"6:34 AM"},
+    {"date":"2026-07-07","score":76,"rhr":53,"bodyBattery":50,"hrv":54,"quality":"보통","duration":395,"needed":540,"bedtime":"12:14 AM","wakeTime":"7:01 AM"},
+    {"date":"2026-07-08","score":83,"rhr":48,"bodyBattery":84,"hrv":55,"quality":"좋음","duration":453,"needed":520,"bedtime":"11:26 PM","wakeTime":"7:01 AM"},
+    {"date":"2026-07-09","score":87,"rhr":46,"bodyBattery":79,"hrv":56,"quality":"좋음","duration":474,"needed":450,"bedtime":"11:05 PM","wakeTime":"7:01 AM"},
+    {"date":"2026-07-10","score":85,"rhr":49,"bodyBattery":54,"hrv":59,"quality":"좋음","duration":511,"needed":420,"bedtime":"12:47 AM","wakeTime":"9:52 AM"},
+    {"date":"2026-07-11","score":85,"rhr":45,"bodyBattery":80,"hrv":60,"quality":"좋음","duration":472,"needed":460,"bedtime":"1:07 AM","wakeTime":"9:11 AM"},
+    {"date":"2026-07-12","score":75,"rhr":51,"bodyBattery":52,"hrv":59,"quality":"보통","duration":374,"needed":460,"bedtime":"12:43 AM","wakeTime":"7:10 AM"},
+    {"date":"2026-07-14","score":64,"rhr":52,"bodyBattery":48,"hrv":60,"quality":"보통","duration":361,"needed":480,"bedtime":"1:10 AM","wakeTime":"7:45 AM"},
+    {"date":"2026-07-15","score":90,"rhr":48,"bodyBattery":67,"hrv":60,"quality":"매우 좋음","duration":561,"needed":460,"bedtime":"12:10 AM","wakeTime":"9:43 AM"},
+    {"date":"2026-07-16","score":75,"rhr":52,"bodyBattery":44,"hrv":57,"quality":"보통","duration":399,"needed":420,"bedtime":"1:36 AM","wakeTime":"8:23 AM"},
+    {"date":"2026-07-17","score":80,"rhr":52,"bodyBattery":49,"hrv":54,"quality":"좋음","duration":438,"needed":480,"bedtime":"1:33 AM","wakeTime":"8:54 AM"},
+    {"date":"2026-07-18","score":66,"rhr":54,"bodyBattery":16,"hrv":50,"quality":"보통","duration":338,"needed":420,"bedtime":"1:38 AM","wakeTime":"7:30 AM"},
+    {"date":"2026-07-19","score":80,"rhr":52,"bodyBattery":67,"hrv":51,"quality":"좋음","duration":441,"needed":480,"bedtime":"12:06 AM","wakeTime":"7:30 AM"},
+    {"date":"2026-07-20","score":84,"rhr":50,"bodyBattery":82,"hrv":52,"quality":"좋음","duration":457,"needed":480,"bedtime":"11:39 PM","wakeTime":"7:38 AM"},
+    {"date":"2026-07-21","score":41,"rhr":52,"bodyBattery":48,"hrv":53,"quality":"낮음","duration":221,"needed":440,"bedtime":"2:34 PM","wakeTime":"6:42 PM"},
+    {"date":"2026-07-22","score":73,"rhr":51,"bodyBattery":41,"hrv":50,"quality":"보통","duration":481,"needed":460,"bedtime":"12:21 AM","wakeTime":"8:23 AM"},
+    {"date":"2026-07-23","score":81,"rhr":51,"bodyBattery":50,"hrv":50,"quality":"좋음","duration":480,"needed":510,"bedtime":"1:05 AM","wakeTime":"9:32 AM"}
+  ];
+    const existing = DB.get('sleeps');
+    garminSleeps.forEach((r, i) => {
+      const idx = existing.findIndex(x => x.date === r.date);
+      const rec = { id: 9000 + i, ...r };
+      if (idx >= 0) existing[idx] = { ...existing[idx], ...rec };
+      else existing.push(rec);
+    });
+    DB.set('sleeps', existing);
+    localStorage.setItem('sleepGarminSeeded', '1');
+  }
+
+  // ── 7/24 데이터 업데이트 ──
+  if (!localStorage.getItem('data0724Seeded')) {
+    // 컨디션: 4점, m
+    const conds0724 = DB.get('conditions');
+    const crec0724 = { id: 4002, date: '2026-07-24', score: 4, mBig: false, mSmall: true, alcohol: false, tags: [], memo: '' };
+    const cidx0724 = conds0724.findIndex(c => c.date === '2026-07-24');
+    if (cidx0724 >= 0) conds0724[cidx0724] = { ...conds0724[cidx0724], ...crec0724 };
+    else conds0724.push(crec0724);
+    DB.set('conditions', conds0724);
+
+    // 단식: O
+    const fasts0724 = DB.get('fastings');
+    const frec0724 = { id: 5001, date: '2026-07-24', fasted: true };
+    const fidx0724 = fasts0724.findIndex(f => f.date === '2026-07-24');
+    if (fidx0724 >= 0) fasts0724[fidx0724] = { ...fasts0724[fidx0724], ...frec0724 };
+    else fasts0724.push(frec0724);
+    DB.set('fastings', fasts0724);
+
+    // 영양제: 크레아틴, 오메가3(x3), 비타민C
+    const sTypes0724 = DB.getObj('suppTypes', { list: [] });
+    if (!sTypes0724.list.includes('비타민C')) sTypes0724.list.push('비타민C');
+    DB.setObj('suppTypes', sTypes0724);
+    const sRecs0724 = DB.get('suppRecords');
+    const sIdx0724 = sRecs0724.findIndex(r => r.date === '2026-07-24');
+    const sRec0724 = { id: 2100, date: '2026-07-24', list: ['크레아틴','오메가3(x3)','비타민C'], memo: '' };
+    if (sIdx0724 >= 0) sRecs0724[sIdx0724] = { ...sRecs0724[sIdx0724], ...sRec0724 };
+    else sRecs0724.push(sRec0724);
+    DB.set('suppRecords', sRecs0724);
+
+    // 러닝: 6.41km, 47:08, HR 161
+    const runs0724 = DB.get('runs');
+    const rIdx0724 = runs0724.findIndex(r => r.date === '2026-07-24');
+    const rRec0724 = { id: 6001, date: '2026-07-24', dist: 6.41, time: '00:47:08', hr: '161', memo: 'Garmin', runType: '' };
+    if (rIdx0724 >= 0) runs0724[rIdx0724] = { ...runs0724[rIdx0724], ...rRec0724 };
+    else runs0724.push(rRec0724);
+    DB.set('runs', runs0724);
+
+    localStorage.setItem('data0724Seeded', '1');
+  }
+
+  // ── 7/27 데이터 업데이트 ──
+  if (!localStorage.getItem('data0727Seeded')) {
+    // 컨디션: 3점, M/m/술 없음
+    const conds0727 = DB.get('conditions');
+    const crec0727 = { id: 4003, date: '2026-07-27', score: 3, mBig: false, mSmall: false, alcohol: false, tags: [], memo: '' };
+    const cidx0727 = conds0727.findIndex(c => c.date === '2026-07-27');
+    if (cidx0727 >= 0) conds0727[cidx0727] = { ...conds0727[cidx0727], ...crec0727 };
+    else conds0727.push(crec0727);
+    DB.set('conditions', conds0727);
+
+    localStorage.setItem('data0727Seeded', '1');
+  }
+
+  // ── END SEED ──
+
+  restoreNavOrder();
+  initDragSort();
+  restoreHomeOrder();
+  initHomeDrag();
+  document.getElementById('sidebarDate').textContent = fmtDateLong(today());
+  renderHome();
+
+  // ── localStorage 변경 감지 (타 탭 포함) → 분석 자동 갱신
+  window.addEventListener('storage', e => {
+    const watchKeys = ['conditions','runs','fastings','eyes','skins','sleeps'];
+    if (watchKeys.includes(e.key)) notifyDataChanged();
+  });
+});
+</script>
+</body>
+</html>

@@ -966,6 +966,14 @@
           <button class="btn btn-outline" onclick="addSkinPackType()">+</button>
         </div>
       </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>저녁 화장품</label>
+        <div id="skinEveningSelector" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+        <div style="display:flex;gap:6px">
+          <input type="text" id="newSkinEvening" placeholder="새 화장품 추가..." style="flex:1;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px" onkeydown="if(event.key==='Enter')addSkinEveningType()">
+          <button class="btn btn-outline" onclick="addSkinEveningType()">+</button>
+        </div>
+      </div>
       <button class="btn btn-primary" style="width:100%" onclick="addSkin()">저장</button>
     </div>
 
@@ -2224,6 +2232,7 @@ let skinCalState = { year: new Date().getFullYear(), month: new Date().getMonth(
 let selectedSkinDate = null;
 let maskOn = false;
 let selectedSkinPacks = new Set();
+let selectedSkinEvening = new Set();
 
 function addSkinPackType() {
   const val = document.getElementById('newSkinPack').value.trim();
@@ -2259,6 +2268,40 @@ function toggleSkinPack(name) {
   renderSkinPackSelector();
 }
 
+function addSkinEveningType() {
+  const val = document.getElementById('newSkinEvening').value.trim();
+  if (!val) return;
+  const types = DB.getObj('skinEveningTypes', { list: [] });
+  if (!types.list.includes(val)) { types.list.push(val); DB.setObj('skinEveningTypes', types); }
+  document.getElementById('newSkinEvening').value = '';
+  renderSkinEveningSelector();
+}
+
+function deleteSkinEveningType(name) {
+  const types = DB.getObj('skinEveningTypes', { list: [] });
+  types.list = types.list.filter(t => t !== name);
+  DB.setObj('skinEveningTypes', types);
+  selectedSkinEvening.delete(name);
+  renderSkinEveningSelector();
+}
+
+function renderSkinEveningSelector() {
+  const types = DB.getObj('skinEveningTypes', { list: [] });
+  const el = document.getElementById('skinEveningSelector');
+  if (!el) return;
+  el.innerHTML = types.list.map(t => `
+    <div style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;border:1.5px solid var(--border);cursor:pointer;font-size:12px;background:${selectedSkinEvening.has(t)?'var(--accent2)':'var(--surface2)'};color:${selectedSkinEvening.has(t)?'#fff':'var(--text)'};transition:all 0.15s"
+         onclick="toggleSkinEvening('${t}')">
+      ${t}
+      <span style="font-size:10px;opacity:0.6;margin-left:2px" onclick="event.stopPropagation();deleteSkinEveningType('${t}')">✕</span>
+    </div>`).join('');
+}
+
+function toggleSkinEvening(name) {
+  selectedSkinEvening.has(name) ? selectedSkinEvening.delete(name) : selectedSkinEvening.add(name);
+  renderSkinEveningSelector();
+}
+
 function selectSkinDate(dateStr) {
   selectedSkinDate = dateStr;
   document.getElementById('skinDate').value = dateStr;
@@ -2268,19 +2311,22 @@ function selectSkinDate(dateStr) {
   document.getElementById('maskLabel').textContent = maskOn ? '✓ 마스크팩 했어요' : '안 함';
   document.getElementById('skinStatus').value = rec ? (rec.status || '') : '';
   selectedSkinPacks = new Set(rec?.packTypes || []);
+  selectedSkinEvening = new Set(rec?.eveningCare || []);
   renderSkinPackSelector();
+  renderSkinEveningSelector();
   // detail panel
   const el = document.getElementById('skinCalDetail');
   if (!rec) {
     el.innerHTML = `<div class="cal-detail-empty">📅 ${fmtDateLong(dateStr)} — 기록 없음</div>`;
   } else {
     const packs = (rec.packTypes||[]).map(p=>`<span class="cal-detail-badge yes">${p}</span>`).join('');
+    const evening = (rec.eveningCare||[]).map(p=>`<span class="cal-detail-badge" style="background:rgba(167,139,250,0.15);color:#a78bfa">${p}</span>`).join('');
     el.innerHTML = `<div class="cal-detail">
       <div class="cal-detail-date">📅 ${fmtDateLong(dateStr)}</div>
       <div class="cal-detail-row">
         <span class="cal-detail-badge ${rec.mask ? 'yes' : 'no'}">${rec.mask ? '✓ 마스크팩' : '마스크팩 없음'}</span>
         ${rec.status ? `<span class="cal-detail-badge yes">${rec.status}</span>` : ''}
-        ${packs}
+        ${packs}${evening}
       </div>
     </div>`;
   }
@@ -2299,17 +2345,20 @@ function addSkin() {
   const date = document.getElementById('skinDate').value || today();
   const status = document.getElementById('skinStatus').value;
   const packTypes = [...selectedSkinPacks];
+  const eveningCare = [...selectedSkinEvening];
   const data = DB.get('skins');
   const existing = data.findIndex(s => s.date === date);
-  const record = { id: Date.now(), date, mask: maskOn, status, packTypes };
+  const record = { id: Date.now(), date, mask: maskOn, status, packTypes, eveningCare };
   if (existing >= 0) data[existing] = record; else data.push(record);
   DB.set('skins', data);
   document.getElementById('skinStatus').value = '';
   selectedSkinPacks = new Set();
+  selectedSkinEvening = new Set();
   maskOn = false;
   document.getElementById('maskToggle').classList.remove('on');
   document.getElementById('maskLabel').textContent = '안 함';
   renderSkinPackSelector();
+  renderSkinEveningSelector();
   selectedSkinDate = date;
   renderSkin();
 }
@@ -2335,6 +2384,7 @@ function renderSkinCal() {
 function renderSkin() {
   document.getElementById('skinDate').value = selectedSkinDate || today();
   renderSkinPackSelector();
+  renderSkinEveningSelector();
   renderSkinCal();
   const data = DB.get('skins').sort((a,b) => b.date.localeCompare(a.date));
   const tbody = document.getElementById('skinTable');

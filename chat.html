@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>건강 기록 봇</title>
+<style>
+  :root {
+    --bg: #0f0f11; --surface: #161618; --surface2: #1d1d20;
+    --border: #27272a; --accent: #7c6af7; --accent2: #5ed8a4;
+    --text: #fff; --muted: #71717a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;
+    height: 100dvh; display: flex; flex-direction: column;
+    max-width: 520px; margin: 0 auto;
+  }
+  .header {
+    padding: 14px 18px; background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+  }
+  .header h1 { font-size: 15px; font-weight: 700; }
+  .header .sub { font-size: 11px; color: var(--muted); }
+  #syncStatus { font-size: 11px; margin-left: auto; color: var(--muted); }
+  #syncStatus.ok { color: var(--accent2); }
+  #syncStatus.err { color: #f76a6a; }
+
+  .chat-area {
+    flex: 1; overflow-y: auto; padding: 16px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .bubble {
+    max-width: 78%; padding: 10px 14px;
+    border-radius: 18px; font-size: 14px; line-height: 1.55;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .bubble.bot { background: var(--surface2); border-bottom-left-radius: 4px; align-self: flex-start; }
+  .bubble.user { background: var(--accent); border-bottom-right-radius: 4px; align-self: flex-end; }
+
+  .qr-wrap { padding: 4px 16px 8px; display: flex; flex-wrap: wrap; gap: 7px; flex-shrink: 0; }
+  .qr {
+    padding: 8px 15px; border-radius: 20px;
+    border: 1px solid var(--border); background: var(--surface2);
+    color: var(--text); font-size: 13px; cursor: pointer; transition: all .15s;
+  }
+  .qr:active, .qr.on { background: var(--accent); border-color: var(--accent); }
+  .qr.done-btn { background: rgba(94,216,164,.15); border-color: var(--accent2); color: var(--accent2); }
+
+  .input-row {
+    padding: 10px 14px 14px; background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex; gap: 8px; align-items: center; flex-shrink: 0;
+  }
+  .input-row input {
+    flex: 1; padding: 10px 14px; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: 20px;
+    color: var(--text); font-size: 14px; outline: none;
+  }
+  .input-row input:focus { border-color: var(--accent); }
+  .send {
+    width: 42px; height: 42px; border-radius: 50%; border: none;
+    background: var(--accent); color: #fff; font-size: 20px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+<div class="header">
+  <span style="font-size:22px">🏃</span>
+  <div><h1>건강 기록 봇</h1><div class="sub">매일 데이터 입력</div></div>
+  <div id="syncStatus">연결 중...</div>
+</div>
+
+<div class="chat-area" id="chatArea"></div>
+<div class="qr-wrap" id="qrWrap"></div>
+
+<div class="input-row">
+  <input id="userInput" type="text" placeholder="메시지 입력..." enterkeyhint="send" />
+  <button class="send" onclick="sendMsg()">↑</button>
+</div>
+
+<script>
+const GIST_FILE = 'health_data.json';
+const SYNC_KEYS = ['conditions','runs','fastings','eyes','skins','sleeps','suppRecords','suppTypes','inbody','runnerGoal'];
+let gToken = localStorage.getItem('gist_token') || '';
+let gId    = localStorage.getItem('gist_id')    || '';
+let parsed = {};
+let step = 'INIT';
+let entry = {};
+let selectedSupps = new Set();
+
+// ── Gist API ──
+async function gistPull() {
+  if (!gToken || !gId) return false;
+  try {
+    const r = await fetch(`https://api.github.com/gists/${gId}`, {
+      headers: { Authorization: `Bearer ${gToken}`, Accept: 'application/vnd.github+json' }
+    });
+    if (!r.ok) return false;
+    const g = await r.json();
+    const raw = g.files[GIST_FILE]?.content;
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    SYNC_KEYS.forEach(k => { try { parsed[k] = JSON.parse(data[k]) || []; } catch { parsed[k] = []; } });
+    return true;
+  } catch { return false; }
+}
+
+async function gistPush() {
+  const data = {};
+  SYNC_KEYS.forEach(k => { data[k] = JSON.stringify(parsed[k] || []); });
+  try {
+    const r = await fetch(`https://api.github.com/gists/${gId}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${gToken}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: { [GIST_FILE]: { content: JSON.stringify(data) } } })
+    });
+    return r.ok;
+  } catch { return false; }
+}
+
+// ── UI helpers ──
+function bot(msg) {
+  const el = document.createElement('div');
+  el.className = 'bubble bot'; el.textContent = msg;
+  document.getElementById('chatArea').appendChild(el);
+  scroll();
+}
+function user(msg) {
+  const el = document.createElement('div');
+  el.className = 'bubble user'; el.textContent = msg;
+  document.getElementById('chatArea').appendChild(el);
+  scroll();
+}
+function scroll() { const a = document.getElementById('chatArea'); a.scrollTop = a.scrollHeight; }
+
+function setQR(opts, multi = false) {
+  const wrap = document.getElementById('qrWrap');
+  wrap.innerHTML = '';
+  opts.forEach(o => {
+    const b = document.createElement('button');
+    b.className = 'qr'; b.textContent = o;
+    if (multi) {
+      b.onclick = () => {
+        if (selectedSupps.has(o)) { selectedSupps.delete(o); b.classList.remove('on'); }
+        else { selectedSupps.add(o); b.classList.add('on'); }
+      };
+    } else {
+      b.onclick = () => { user(o); setQR([]); go(o); };
+    }
+    wrap.appendChild(b);
+  });
+  if (multi) {
+    const done = document.createElement('button');
+    done.className = 'qr done-btn'; done.textContent = '✓ 완료';
+    done.onclick = () => go('__SUPP_DONE__');
+    wrap.appendChild(done);
+  }
+}
+
+function setSyncStatus(cls, msg) {
+  const el = document.getElementById('syncStatus');
+  el.textContent = msg; el.className = cls;
+}
+
+// ── Input ──
+document.getElementById('userInput').addEventListener('keydown', e => { if (e.key === 'Enter') sendMsg(); });
+function sendMsg() {
+  const inp = document.getElementById('userInput');
+  const v = inp.value.trim(); if (!v) return;
+  inp.value = ''; user(v); setQR([]); go(v);
+}
+
+// ── Data helpers ──
+function today() { return new Date().toISOString().split('T')[0]; }
+function newEntry() {
+  return { date: today(), score: null, mBig: false, mSmall: false, alcohol: false,
+           ran: false, runDist: null, runTime: '', runHr: '',
+           fasted: false, eyePain: false, eyeDrop: false, supps: [], mask: false, maskType: '' };
+}
+
+// ── State machine ──
+async function go(val) {
+  switch (step) {
+
+    case 'SETUP_TOKEN':
+      gToken = val.trim(); localStorage.setItem('gist_token', gToken);
+      bot('Gist ID를 입력해줘\n(gist.github.com/아이디/여기 부분)');
+      step = 'SETUP_GIST'; break;
+
+    case 'SETUP_GIST':
+      gId = val.trim(); localStorage.setItem('gist_id', gId);
+      bot('연결 확인 중...');
+      if (await gistPull()) {
+        setSyncStatus('ok', '✓ 연결됨');
+        askDate();
+      } else {
+        setSyncStatus('err', '연결 실패');
+        bot('토큰 또는 Gist ID가 잘못된 것 같아. 다시 입력해줘.\n\nGitHub Personal Access Token:');
+        step = 'SETUP_TOKEN';
+      }
+      break;
+
+    case 'DATE':
+      if (val === '오늘') entry.date = today();
+      else if (/^\d{4}-\d{2}-\d{2}$/.test(val)) entry.date = val;
+      else { bot('날짜 형식이 맞지 않아 (예: 2026-07-28)'); return; }
+      askCondition(); break;
+
+    case 'CONDITION':
+      const sc = parseInt(val);
+      if (sc >= 1 && sc <= 5) { entry.score = sc; askMMS(); }
+      else bot('1~5 사이 숫자를 눌러줘 😊'); break;
+
+    case 'MMS':
+      entry.mBig    = val.includes('M') && !val.toLowerCase().startsWith('m');
+      entry.mSmall  = val.startsWith('m') || val.includes('+m');
+      entry.alcohol = val.includes('술');
+      askRun(); break;
+
+    case 'RUN':
+      entry.ran = (val === '했음');
+      if (entry.ran) { bot('거리 시간 심박을 입력해줘\n(예: 6.4 47:08 161)'); step = 'RUN_DETAIL'; }
+      else askFast(); break;
+
+    case 'RUN_DETAIL': {
+      const p = val.split(/\s+/);
+      entry.runDist = parseFloat(p[0]) || null;
+      entry.runTime = p[1] || '';
+      entry.runHr   = p[2] || '';
+      askFast(); break;
+    }
+
+    case 'FAST':
+      entry.fasted = (val === '했음');
+      askEye(); break;
+
+    case 'EYE':
+      entry.eyePain = (val !== '없었음');
+      entry.eyeDrop = val.includes('안약 O');
+      askSupp(); break;
+
+    case 'SUPP':
+      if (val === '__SUPP_DONE__') {
+        entry.supps = [...selectedSupps];
+        user(entry.supps.length ? entry.supps.join(', ') : '없음');
+        setQR([]);
+        askSkin();
+      } break;
+
+    case 'SKIN':
+      entry.mask     = (val !== '안 함');
+      entry.maskType = entry.mask ? val : '';
+      showConfirm(); break;
+
+    case 'CONFIRM':
+      if (val === '저장') { await saveEntry(); }
+      else { bot('취소했어. 다시 할게!'); entry = newEntry(); selectedSupps = new Set(); askDate(); }
+      break;
+
+    case 'RESTART':
+      if (val === '네') { entry = newEntry(); selectedSupps = new Set(); askDate(); }
+      break;
+  }
+}
+
+// ── Step functions ──
+function askDate() {
+  bot(`오늘이 ${today()} 맞아?`);
+  setQR(['오늘', '다른 날짜 직접 입력']);
+  step = 'DATE';
+}
+// override '다른 날짜' to just set step
+document.getElementById('qrWrap');
+
+function askCondition() {
+  bot(`${entry.date} 컨디션 점수는? (1~5점)`);
+  setQR(['1','2','3','4','5']);
+  step = 'CONDITION';
+}
+
+function askMMS() {
+  bot('M / m / 술 체크해줘');
+  setQR(['없음','M','m','술','M+술','m+술']);
+  step = 'MMS';
+}
+
+function askRun() {
+  bot('오늘 러닝했어?');
+  setQR(['했음','안 했음']);
+  step = 'RUN';
+}
+
+function askFast() {
+  bot('저녁 단식했어?');
+  setQR(['했음','안 했음']);
+  step = 'FAST';
+}
+
+function askEye() {
+  bot('눈 통증 있었어?');
+  setQR(['없었음','있었음 (안약 O)','있었음 (안약 X)']);
+  step = 'EYE';
+}
+
+function askSupp() {
+  selectedSupps = new Set();
+  bot('영양제 선택해줘 (여러 개 선택 후 완료)');
+  setQR(['크레아틴','오메가3','오메가3(x3)','유산균','비타민C'], true);
+  step = 'SUPP';
+}
+
+function askSkin() {
+  bot('마스크팩 했어?');
+  setQR(['안 함','파티온팩','Azelaic Acid팩','기타']);
+  step = 'SKIN';
+}
+
+function showConfirm() {
+  const mms = [entry.mBig?'M':'', entry.mSmall?'m':'', entry.alcohol?'술':''].filter(Boolean).join('+') || '없음';
+  const run = entry.ran ? `${entry.runDist}km ${entry.runTime}${entry.runHr ? ' HR'+entry.runHr : ''}` : 'X';
+  bot([
+    `📅 ${entry.date}`,
+    `💪 컨디션: ${entry.score}점`,
+    `🔖 M/m/술: ${mms}`,
+    `🏃 러닝: ${run}`,
+    `🌙 단식: ${entry.fasted ? 'O' : 'X'}`,
+    `👁 눈 통증: ${entry.eyePain ? (entry.eyeDrop?'O(안약O)':'O(안약X)') : 'X'}`,
+    `💊 영양제: ${entry.supps.length ? entry.supps.join(', ') : '없음'}`,
+    `🧴 마스크팩: ${entry.mask ? entry.maskType : 'X'}`,
+  ].join('\n'));
+  bot('저장할까?');
+  setQR(['저장','취소']);
+  step = 'CONFIRM';
+}
+
+async function saveEntry() {
+  bot('저장 중...');
+  setQR([]);
+  const d = entry.date, ts = Date.now();
+
+  // conditions
+  const conds = parsed.conditions || [];
+  const ci = conds.findIndex(c => c.date === d);
+  const cr = { id: ci>=0?conds[ci].id:ts, date:d, score:entry.score, mBig:entry.mBig, mSmall:entry.mSmall, alcohol:entry.alcohol, tags:[], memo:'' };
+  if (ci>=0) conds[ci]={...conds[ci],...cr}; else conds.push(cr);
+  parsed.conditions = conds;
+
+  // runs
+  if (entry.ran && entry.runDist) {
+    const runs = parsed.runs || [];
+    const ri = runs.findIndex(r => r.date === d);
+    const rr = { id:ri>=0?runs[ri].id:ts+1, date:d, dist:entry.runDist, time:entry.runTime, hr:entry.runHr, memo:'chat', runType:'' };
+    if (ri>=0) runs[ri]={...runs[ri],...rr}; else runs.push(rr);
+    parsed.runs = runs;
+  }
+
+  // fastings
+  if (entry.fasted) {
+    const fasts = parsed.fastings || [];
+    const fi = fasts.findIndex(f => f.date === d);
+    const fr = { id:fi>=0?fasts[fi].id:ts+2, date:d, fasted:true };
+    if (fi>=0) fasts[fi]={...fasts[fi],...fr}; else fasts.push(fr);
+    parsed.fastings = fasts;
+  }
+
+  // eyes
+  if (entry.eyePain) {
+    const eyes = parsed.eyes || [];
+    const ei = eyes.findIndex(e => e.date === d);
+    const er = { id:ei>=0?eyes[ei].id:ts+3, date:d, pain:true, drop:entry.eyeDrop, painLevel:0, memo:'' };
+    if (ei>=0) eyes[ei]={...eyes[ei],...er}; else eyes.push(er);
+    parsed.eyes = eyes;
+  }
+
+  // suppRecords
+  if (entry.supps.length) {
+    const sr = parsed.suppRecords || [];
+    const si = sr.findIndex(s => s.date === d);
+    const srec = { id:si>=0?sr[si].id:ts+4, date:d, list:entry.supps, memo:'' };
+    if (si>=0) sr[si]={...sr[si],...srec}; else sr.push(srec);
+    parsed.suppRecords = sr;
+  }
+
+  // skins
+  if (entry.mask) {
+    const skins = parsed.skins || [];
+    const ski = skins.findIndex(s => s.date === d);
+    const skr = { id:ski>=0?skins[ski].id:ts+5, date:d, mask:true, status:entry.maskType, memo:'' };
+    if (ski>=0) skins[ski]={...skins[ski],...skr}; else skins.push(skr);
+    parsed.skins = skins;
+  }
+
+  const ok = await gistPush();
+  if (ok) {
+    setSyncStatus('ok', '✓ 저장됨');
+    bot('✅ 저장 완료!\n대시보드에서 ⬇ 불러오기 누르면 반영돼.');
+    bot('다른 날 입력할까?');
+    setQR(['네']);
+    step = 'RESTART';
+  } else {
+    bot('❌ 저장 실패. 토큰/Gist ID를 확인해줘.');
+  }
+}
+
+// ── Init ──
+async function init() {
+  if (!gToken || !gId) {
+    bot('안녕! 건강 기록 봇이야 👋');
+    bot('처음 설정이 필요해.\nGitHub Personal Access Token을 입력해줘:');
+    step = 'SETUP_TOKEN';
+  } else {
+    bot('안녕! 오늘 건강 데이터 입력할게 😊');
+    const ok = await gistPull();
+    if (ok) {
+      setSyncStatus('ok', '✓ 연결됨');
+      askDate();
+    } else {
+      setSyncStatus('err', '연결 실패');
+      bot('Gist 연결 실패. 토큰을 다시 입력해줘:');
+      step = 'SETUP_TOKEN';
+    }
+  }
+}
+init();
+</script>
+</body>
+</html>

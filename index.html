@@ -2310,9 +2310,23 @@ function selectSkinDate(dateStr) {
   document.getElementById('maskToggle').classList.toggle('on', maskOn);
   document.getElementById('maskLabel').textContent = maskOn ? '✓ 마스크팩 했어요' : '안 함';
   document.getElementById('skinStatus').value = rec ? (rec.status || '') : '';
+
+  // 팩 종류 복원 — 마스터 목록에 없는 항목도 자동 추가
   selectedSkinPacks = new Set(rec?.packTypes || []);
-  selectedSkinEvening = new Set(rec?.eveningCare || []);
+  if (rec?.packTypes?.length) {
+    const pt = DB.getObj('skinPackTypes', { list: [] });
+    rec.packTypes.forEach(p => { if (!pt.list.includes(p)) pt.list.push(p); });
+    DB.setObj('skinPackTypes', pt);
+  }
   renderSkinPackSelector();
+
+  // 저녁 화장품 복원 — 마스터 목록에 없는 항목도 자동 추가
+  selectedSkinEvening = new Set(rec?.eveningCare || []);
+  if (rec?.eveningCare?.length) {
+    const et = DB.getObj('skinEveningTypes', { list: [] });
+    rec.eveningCare.forEach(p => { if (!et.list.includes(p)) et.list.push(p); });
+    DB.setObj('skinEveningTypes', et);
+  }
   renderSkinEveningSelector();
   // detail panel
   const el = document.getElementById('skinCalDetail');

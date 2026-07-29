@@ -1727,7 +1727,7 @@ function renderHomePeriodChart() {
   // 이벤트 섹션
   let eventHtml = '';
 
-  if (isDaily) {
+  if (homePeriod === 'week' || homePeriod === 'month') {
     // 도트 그리드 (주: 26px, 월: 12px)
     const dotSize = homePeriod === 'week' ? 26 : 12;
     const gap = homePeriod === 'week' ? 4 : 2;
@@ -1762,15 +1762,17 @@ function renderHomePeriodChart() {
     }
   } else {
     // 분기/연간: 전체 기간 이벤트 빈도 막대
-    const totalDays = dateSets.flat().length || labels.length * (homePeriod === 'quarter' ? 7 : 30);
+    // 분기는 일별 boolean 배열, 연간은 월별 숫자 배열 → 공통 합산
+    const totalDays = homePeriod === 'year' ? dateSets.flat().length : labels.length;
+    const cnt = arr => arr.reduce((a, b) => a + (b ? 1 : 0), 0);
     const totals = [
-      { icon: '🌙', label: '단식',    count: fastData.reduce((a,b)=>a+b,0),    color: '#7c6af7' },
-      { icon: '🏃', label: '러닝',    count: pRunCnt,                           color: 'var(--accent)' },
-      { icon: '🍺', label: '음주',    count: alcoholData.reduce((a,b)=>a+b,0), color: '#f7c26a' },
-      { icon: '👁', label: '눈통증',  count: eyeData.reduce((a,b)=>a+b,0),     color: '#f7706a' },
-      { icon: '🧴', label: '마스크팩',count: maskData.reduce((a,b)=>a+b,0),    color: '#5ed8a4' },
-      { icon: 'M',  label: '생리(대)',count: mBigData.reduce((a,b)=>a+b,0),    color: '#f7706a' },
-      { icon: 'm',  label: '생리(소)',count: mSmallData.reduce((a,b)=>a+b,0),  color: '#f7a06a' },
+      { icon: '🌙', label: '단식',    count: cnt(fastData),    color: '#7c6af7' },
+      { icon: '🏃', label: '러닝',    count: cnt(runData.map(v=>(v||0)>0)), color: 'var(--accent)' },
+      { icon: '🍺', label: '음주',    count: cnt(alcoholData), color: '#f7c26a' },
+      { icon: '👁', label: '눈통증',  count: cnt(eyeData),     color: '#f7706a' },
+      { icon: '🧴', label: '마스크팩',count: cnt(maskData),    color: '#5ed8a4' },
+      { icon: 'M',  label: '생리(대)',count: cnt(mBigData),    color: '#f7706a' },
+      { icon: 'm',  label: '생리(소)',count: cnt(mSmallData),  color: '#f7a06a' },
     ].filter(e => e.count > 0);
 
     if (totals.length > 0) {

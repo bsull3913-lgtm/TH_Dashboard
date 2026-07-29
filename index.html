@@ -1082,12 +1082,12 @@
       <div class="card-title">오늘 컨디션</div>
       <div class="form-group" style="margin-bottom:14px">
         <label>날짜</label>
-        <input type="date" id="condDate">
+        <input type="date" id="condDate" onchange="selectCondDate(this.value)">
       </div>
       <div style="margin-bottom:18px">
         <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:10px">컨디션 점수: <span id="condScoreDisplay" style="color:var(--accent);font-weight:700;font-size:18px">3</span>/5</label>
         <input type="range" id="condScore" min="1" max="5" value="3"
-          oninput="document.getElementById('condScoreDisplay').textContent=this.value;updateScoreColor(this.value)"
+          oninput="document.getElementById('condScoreDisplay').textContent=this.value;updateScoreColor(this.value);autoSaveCondition()"
           style="width:100%;accent-color:var(--accent)">
         <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-top:4px">
           <span>😣 매우나쁨</span><span>😟 나쁨</span><span>😐 보통</span><span>😊 좋음</span><span>🤩 매우좋음</span>
@@ -1108,19 +1108,27 @@
       <div class="form-group" style="margin-bottom:14px">
         <label>M / m / 술</label>
         <div style="display:flex;gap:10px;margin-top:6px">
-          <div id="condMBig" onclick="this.classList.toggle('selected')"
+          <div id="condMBig" onclick="this.classList.toggle('selected');autoSaveCondition()"
             class="supp-chip" style="font-size:15px;font-weight:700;letter-spacing:1px;min-width:52px;text-align:center">M</div>
-          <div id="condMSmall" onclick="this.classList.toggle('selected')"
+          <div id="condMSmall" onclick="this.classList.toggle('selected');autoSaveCondition()"
             class="supp-chip" style="font-size:15px;font-weight:700;letter-spacing:1px;min-width:52px;text-align:center">m</div>
-          <div id="condAlcohol" onclick="this.classList.toggle('selected')"
+          <div id="condAlcohol" onclick="this.classList.toggle('selected');autoSaveCondition()"
             class="supp-chip" style="font-size:15px;font-weight:700;letter-spacing:1px;min-width:52px;text-align:center">🍺</div>
         </div>
       </div>
       <div class="form-group" style="margin-bottom:14px">
-        <label>메모</label>
-        <textarea id="condMemo" placeholder="오늘 몸 상태를 자유롭게..."></textarea>
+        <label>근무형태</label>
+        <div id="workTypeSelector" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;margin-top:6px"></div>
+        <div style="display:flex;gap:6px">
+          <input type="text" id="newWorkType" placeholder="새 근무형태 추가..." style="flex:1;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px" onkeydown="if(event.key==='Enter')addWorkType()">
+          <button class="btn btn-outline" onclick="addWorkType()">+</button>
+        </div>
       </div>
-      <button class="btn btn-primary" style="width:100%" onclick="saveCondition()">저장</button>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>메모</label>
+        <textarea id="condMemo" placeholder="오늘 몸 상태를 자유롭게..." oninput="clearTimeout(window._condMemoTimer);window._condMemoTimer=setTimeout(autoSaveCondition,700)"></textarea>
+      </div>
+      <div id="condSaveIndicator" style="text-align:center;font-size:12px;color:var(--accent2);height:18px;opacity:0;transition:opacity 0.4s">✓ 저장됨</div>
     </div>
 
     <div class="card">
@@ -1146,7 +1154,7 @@
     <div class="card-title">컨디션 기록</div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>날짜</th><th>점수</th><th>M/m/술</th><th>태그</th><th>메모</th><th></th></tr></thead>
+        <thead><tr><th>날짜</th><th>점수</th><th>M/m/술</th><th>근무</th><th>태그</th><th>메모</th><th></th></tr></thead>
         <tbody id="condTable"></tbody>
       </table>
       <div class="empty-state" id="condEmpty">매일 컨디션을 기록해보세요 📊</div>
@@ -2685,7 +2693,7 @@ function renderSupp() {
 // CONDITION
 // ═══════════════════════════════════
 let condChart = null;
-function toggleCondTag(el) { el.classList.toggle('selected'); }
+function toggleCondTag(el) { el.classList.toggle('selected'); autoSaveCondition(); }
 function updateScoreColor(v) {}
 
 // ── 데이터 변경 시 분석 자동 갱신
@@ -2694,7 +2702,45 @@ function notifyDataChanged() {
   scheduleSync();
 }
 
-function saveCondition() {
+let selectedWorkType = null;
+
+function renderWorkTypeSelector() {
+  const types = DB.getObj('workTypes', { list: [] });
+  const el = document.getElementById('workTypeSelector');
+  if (!el) return;
+  el.innerHTML = types.list.map(t => `
+    <div style="display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border-radius:20px;border:1.5px solid var(--border);cursor:pointer;font-size:12px;background:${selectedWorkType===t?'var(--accent)':'var(--surface2)'};color:${selectedWorkType===t?'#fff':'var(--text)'};transition:all 0.15s"
+         onclick="selectWorkType('${t.replace(/'/g,"\\'")}')">
+      ${t}
+      <span onclick="event.stopPropagation();deleteWorkType('${t.replace(/'/g,"\\'")}')" style="margin-left:3px;opacity:0.55;font-size:11px;line-height:1">×</span>
+    </div>
+  `).join('');
+}
+
+function selectWorkType(name) {
+  selectedWorkType = selectedWorkType === name ? null : name;
+  renderWorkTypeSelector();
+  autoSaveCondition();
+}
+
+function addWorkType() {
+  const val = document.getElementById('newWorkType').value.trim();
+  if (!val) return;
+  const types = DB.getObj('workTypes', { list: [] });
+  if (!types.list.includes(val)) { types.list.push(val); DB.setObj('workTypes', types); }
+  document.getElementById('newWorkType').value = '';
+  renderWorkTypeSelector();
+}
+
+function deleteWorkType(name) {
+  const types = DB.getObj('workTypes', { list: [] });
+  types.list = types.list.filter(t => t !== name);
+  DB.setObj('workTypes', types);
+  if (selectedWorkType === name) selectedWorkType = null;
+  renderWorkTypeSelector();
+}
+
+function autoSaveCondition() {
   const date = document.getElementById('condDate').value || today();
   const score = parseInt(document.getElementById('condScore').value);
   const tags = [...document.querySelectorAll('#condTags .supp-chip.selected')].map(e => e.textContent.trim());
@@ -2704,17 +2750,14 @@ function saveCondition() {
   const alcohol = document.getElementById('condAlcohol').classList.contains('selected');
   const data = DB.get('conditions');
   const existing = data.findIndex(c => c.date === date);
-  const record = { id: Date.now(), date, score, tags, memo, mBig, mSmall, alcohol };
+  const record = { id: existing >= 0 ? data[existing].id : Date.now(), date, score, tags, memo, mBig, mSmall, alcohol, workType: selectedWorkType };
   if (existing >= 0) data[existing] = record; else data.push(record);
   DB.set('conditions', data);
-  document.getElementById('condMemo').value = '';
-  document.getElementById('condScore').value = 3;
-  document.getElementById('condScoreDisplay').textContent = '3';
-  document.querySelectorAll('#condTags .supp-chip.selected').forEach(e => e.classList.remove('selected'));
-  document.getElementById('condMBig').classList.remove('selected');
-  document.getElementById('condMSmall').classList.remove('selected');
-  document.getElementById('condAlcohol').classList.remove('selected');
-  renderCondition();
+  // 저장 표시
+  const ind = document.getElementById('condSaveIndicator');
+  if (ind) { ind.style.opacity = '1'; clearTimeout(window._condSaveTimer); window._condSaveTimer = setTimeout(() => ind.style.opacity = '0', 1200); }
+  renderCondCal();
+  renderCondTable();
   notifyDataChanged();
 }
 
@@ -2758,7 +2801,18 @@ function selectCondDate(dateStr) {
     tagChips.forEach(chip => {
       chip.classList.toggle('selected', (rec.tags||[]).includes(chip.textContent.trim()));
     });
+  } else {
+    document.getElementById('condScore').value = 3;
+    document.getElementById('condScoreDisplay').textContent = '3';
+    document.getElementById('condMemo').value = '';
+    document.getElementById('condMBig').classList.remove('selected');
+    document.getElementById('condMSmall').classList.remove('selected');
+    document.getElementById('condAlcohol').classList.remove('selected');
+    document.querySelectorAll('#condTags .supp-chip').forEach(e => e.classList.remove('selected'));
   }
+  // 근무형태 복원
+  selectedWorkType = rec?.workType || null;
+  renderWorkTypeSelector();
   // detail panel
   const scoreLabel = ['','😣 매우나쁨','😟 나쁨','😐 보통','😊 좋음','🤩 매우좋음'];
   const el = document.getElementById('condCalDetail');
@@ -2773,6 +2827,7 @@ function selectCondDate(dateStr) {
         <span style="font-size:13px;color:${scoreColor}">${scoreLabel[rec.score]||''}</span>
       </div>
       <div class="cal-detail-row" style="flex-wrap:wrap;gap:6px">
+        ${rec.workType ? `<span class="cal-detail-badge" style="background:var(--surface3);color:var(--text)">🏢 ${rec.workType}</span>` : ''}
         ${rec.mBig    ? `<span class="cal-detail-badge yes">M</span>` : ''}
         ${rec.mSmall  ? `<span class="cal-detail-badge yes">m</span>` : ''}
         ${rec.alcohol ? `<span class="cal-detail-badge red">🍺 음주</span>` : ''}
@@ -2786,6 +2841,7 @@ function selectCondDate(dateStr) {
 
 function renderCondition() {
   document.getElementById('condDate').value = selectedCondDate || today();
+  renderWorkTypeSelector();
   renderCondCal();
   const data = DB.get('conditions').sort((a,b) => a.date.localeCompare(b.date));
 
@@ -2817,6 +2873,11 @@ function renderCondition() {
     <div><span style="font-size:22px;font-weight:700">${data.length}</span><br><span style="font-size:12px;color:var(--text-muted)">기록일</span></div>
   `;
 
+  renderCondTable();
+}
+
+function renderCondTable() {
+  const data = DB.get('conditions').sort((a,b) => a.date.localeCompare(b.date));
   const tbody = document.getElementById('condTable');
   const empty = document.getElementById('condEmpty');
   const desc = [...data].reverse();
@@ -2837,6 +2898,7 @@ function renderCondition() {
         ${r.alcohol ? `<span style="font-size:14px;margin-left:${(r.mBig||r.mSmall)?'6px':'0'}">🍺</span>` : ''}
         ${!r.mBig && !r.mSmall && !r.alcohol ? `<span style="color:var(--text-muted);font-size:12px">-</span>` : ''}
       </td>
+      <td style="font-size:12px;color:var(--text-muted)">${r.workType || '-'}</td>
       <td>${(r.tags||[]).map(t => `<span class="tag" style="font-size:11px">${t}</span>`).join('')}</td>
       <td style="color:var(--text-muted);font-size:13px">${r.memo || ''}</td>
       <td><button class="btn btn-danger" onclick="deleteCondition(${r.id})">삭제</button></td>
@@ -4010,6 +4072,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     localStorage.setItem('suppSeedLoaded', '1');
   }
 
+  // 근무형태 시드 (최초 1회만)
+  if (!localStorage.getItem('workTypeSeedLoaded')) {
+    const wt = DB.getObj('workTypes', { list: [] });
+    ['데이','나이트','오피스','오프'].forEach(t => { if (!wt.list.includes(t)) wt.list.push(t); });
+    DB.setObj('workTypes', wt);
+    localStorage.setItem('workTypeSeedLoaded', '1');
+  }
+
   // 눈 상태: 오늘 통증 + 안약
   const eyeSeed = DB.get('eyes');
   const eyeIdx = eyeSeed.findIndex(e => e.date === '2026-07-22');
@@ -4195,7 +4265,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ═══════════════════════════════════
 // GITHUB GIST SYNC
 // ═══════════════════════════════════
-const SYNC_KEYS = ['conditions','runs','fastings','eyes','skins','sleeps','suppRecords','suppTypes','inbody','runnerGoal','habits','skinPackTypes','skinEveningTypes'];
+const SYNC_KEYS = ['conditions','runs','fastings','eyes','skins','sleeps','suppRecords','suppTypes','inbody','runnerGoal','habits','skinPackTypes','skinEveningTypes','workTypes'];
 
 const GistSync = {
   get token()  { return localStorage.getItem('gist_token')  || ''; },

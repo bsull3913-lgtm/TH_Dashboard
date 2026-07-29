@@ -1085,13 +1085,8 @@
         <input type="date" id="condDate" onchange="selectCondDate(this.value)">
       </div>
       <div style="margin-bottom:18px">
-        <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:10px">컨디션 점수: <span id="condScoreDisplay" style="color:var(--accent);font-weight:700;font-size:18px">3</span>/5</label>
-        <input type="range" id="condScore" min="1" max="5" value="3"
-          oninput="document.getElementById('condScoreDisplay').textContent=this.value;updateScoreColor(this.value);autoSaveCondition()"
-          style="width:100%;accent-color:var(--accent)">
-        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-top:4px">
-          <span>😣 매우나쁨</span><span>😟 나쁨</span><span>😐 보통</span><span>😊 좋음</span><span>🤩 매우좋음</span>
-        </div>
+        <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:10px">컨디션 점수</label>
+        <div id="condScoreChips" style="display:flex;gap:8px"></div>
       </div>
       <div class="form-group" style="margin-bottom:14px">
         <label>컨디션 태그</label>
@@ -2702,6 +2697,28 @@ function notifyDataChanged() {
   scheduleSync();
 }
 
+let selectedCondScore = null;
+const SCORE_LABELS = ['','😣 매우나쁨','😟 나쁨','😐 보통','😊 좋음','🤩 매우좋음'];
+
+function renderCondScoreChips() {
+  const el = document.getElementById('condScoreChips');
+  if (!el) return;
+  el.innerHTML = [1,2,3,4,5].map(n => {
+    const sel = selectedCondScore === n;
+    const col = n >= 5 ? 'var(--accent2)' : n >= 4 ? 'var(--accent)' : n >= 3 ? 'var(--accent4)' : 'var(--accent3)';
+    return `<div onclick="selectCondScore(${n})" style="flex:1;text-align:center;padding:10px 4px;border-radius:12px;cursor:pointer;border:2px solid ${sel ? col : 'var(--border)'};background:${sel ? col : 'var(--surface2)'};color:${sel ? '#fff' : 'var(--text-muted)'};transition:all 0.15s;user-select:none">
+      <div style="font-size:20px">${SCORE_LABELS[n].split(' ')[0]}</div>
+      <div style="font-size:11px;margin-top:2px;font-weight:${sel?'700':'400'}">${n}점</div>
+    </div>`;
+  }).join('');
+}
+
+function selectCondScore(n) {
+  selectedCondScore = selectedCondScore === n ? null : n;
+  renderCondScoreChips();
+  autoSaveCondition();
+}
+
 let selectedWorkType = null;
 
 function renderWorkTypeSelector() {
@@ -2741,8 +2758,9 @@ function deleteWorkType(name) {
 }
 
 function autoSaveCondition() {
+  if (selectedCondScore === null) return;
   const date = document.getElementById('condDate').value || today();
-  const score = parseInt(document.getElementById('condScore').value);
+  const score = selectedCondScore;
   const tags = [...document.querySelectorAll('#condTags .supp-chip.selected')].map(e => e.textContent.trim());
   const memo = document.getElementById('condMemo').value;
   const mBig = document.getElementById('condMBig').classList.contains('selected');
@@ -2791,8 +2809,7 @@ function selectCondDate(dateStr) {
   document.getElementById('condDate').value = dateStr;
   const rec = DB.get('conditions').find(c => c.date === dateStr);
   if (rec) {
-    document.getElementById('condScore').value = rec.score;
-    document.getElementById('condScoreDisplay').textContent = rec.score;
+    selectedCondScore = rec.score || null;
     document.getElementById('condMemo').value = rec.memo || '';
     document.getElementById('condMBig').classList.toggle('selected', !!rec.mBig);
     document.getElementById('condMSmall').classList.toggle('selected', !!rec.mSmall);
@@ -2802,14 +2819,14 @@ function selectCondDate(dateStr) {
       chip.classList.toggle('selected', (rec.tags||[]).includes(chip.textContent.trim()));
     });
   } else {
-    document.getElementById('condScore').value = 3;
-    document.getElementById('condScoreDisplay').textContent = '3';
+    selectedCondScore = null;
     document.getElementById('condMemo').value = '';
     document.getElementById('condMBig').classList.remove('selected');
     document.getElementById('condMSmall').classList.remove('selected');
     document.getElementById('condAlcohol').classList.remove('selected');
     document.querySelectorAll('#condTags .supp-chip').forEach(e => e.classList.remove('selected'));
   }
+  renderCondScoreChips();
   // 근무형태 복원
   selectedWorkType = rec?.workType || null;
   renderWorkTypeSelector();
@@ -2841,6 +2858,7 @@ function selectCondDate(dateStr) {
 
 function renderCondition() {
   document.getElementById('condDate').value = selectedCondDate || today();
+  renderCondScoreChips();
   renderWorkTypeSelector();
   renderCondCal();
   const data = DB.get('conditions').sort((a,b) => a.date.localeCompare(b.date));

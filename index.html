@@ -1613,11 +1613,11 @@ function renderHomePeriodChart() {
   const avg = arr => { const v = arr.filter(x => x != null && !isNaN(x)); return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null; };
   const sum = arr => { const v = arr.filter(x => x > 0); return v.length ? v.reduce((a,b)=>a+b,0) : null; };
   const now = new Date();
-  const isDaily = homePeriod === 'week' || homePeriod === 'month';
+  const isDaily = homePeriod === 'week' || homePeriod === 'month' || homePeriod === 'quarter';
 
   let labels = [], condData = [], sleepData = [], runData = [];
   let fastData = [], alcoholData = [], eyeData = [], maskData = [], mBigData = [], mSmallData = [];
-  let dateSets = []; // for aggregated periods: array of date-string arrays per bucket
+  let dateSets = []; // for aggregated periods (year only)
   let periodTitle = '';
 
   if (homePeriod === 'week') {
@@ -1663,24 +1663,20 @@ function renderHomePeriodChart() {
     const qm = Math.floor(now.getMonth()/3)*3;
     const qStart = new Date(now.getFullYear(), qm, 1);
     const qEnd   = new Date(now.getFullYear(), qm + 3, 0); // 분기 마지막 날
-    const dow = (qStart.getDay()+6)%7;
-    const cur = new Date(qStart); cur.setDate(qStart.getDate()-dow);
+    const cur = new Date(qStart);
     while (cur <= qEnd) {
-      const wDates = Array.from({length:7}, (_,i) => {
-        const d = new Date(cur); d.setDate(cur.getDate()+i); return d.toISOString().slice(0,10);
-      });
+      const ds = cur.toISOString().slice(0,10);
       labels.push(`${cur.getMonth()+1}/${cur.getDate()}`);
-      condData.push(avg(wDates.map(d => condMap[d]?.score || null)));
-      sleepData.push(avg(wDates.map(d => sleepMap[d]?.score || null)));
-      runData.push(sum(wDates.map(d => parseFloat(runMap[d]?.dist)||0)));
-      dateSets.push(wDates);
-      fastData.push(wDates.filter(d => fastMap[d]?.fasted).length);
-      alcoholData.push(wDates.filter(d => condMap[d]?.alcohol).length);
-      eyeData.push(wDates.filter(d => eyeMap[d]?.pain).length);
-      maskData.push(wDates.filter(d => skinMap[d]?.mask).length);
-      mBigData.push(wDates.filter(d => condMap[d]?.mBig).length);
-      mSmallData.push(wDates.filter(d => condMap[d]?.mSmall).length);
-      cur.setDate(cur.getDate()+7);
+      condData.push(condMap[ds]?.score || null);
+      sleepData.push(sleepMap[ds]?.score || null);
+      runData.push(parseFloat(runMap[ds]?.dist) || null);
+      fastData.push(!!(fastMap[ds]?.fasted));
+      alcoholData.push(!!(condMap[ds]?.alcohol));
+      eyeData.push(!!(eyeMap[ds]?.pain));
+      maskData.push(!!(skinMap[ds]?.mask));
+      mBigData.push(!!(condMap[ds]?.mBig));
+      mSmallData.push(!!(condMap[ds]?.mSmall));
+      cur.setDate(cur.getDate() + 1);
     }
     const qNames = ['1분기','2분기','3분기','4분기'];
     periodTitle = `${now.getFullYear()}년 ${qNames[Math.floor(now.getMonth()/3)]}`;
@@ -1778,10 +1774,9 @@ function renderHomePeriodChart() {
     ].filter(e => e.count > 0);
 
     if (totals.length > 0) {
-      const maxCount = Math.max(...totals.map(e => e.count));
       const barsHtml = totals.map(ev => {
         const pct = Math.round(ev.count / totalDays * 100);
-        const barW = Math.max(2, Math.round(ev.count / maxCount * 100));
+        const barW = Math.max(1, pct);
         return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
           <div style="min-width:72px;font-size:11px;color:var(--text-muted);flex-shrink:0">${ev.icon} ${ev.label}</div>
           <div style="flex:1;height:14px;background:var(--surface2);border-radius:7px;overflow:hidden">
@@ -1837,7 +1832,7 @@ function renderHomePeriodChart() {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: true, labels: { color:'#8888aa', font:{size:10}, boxWidth:12, padding:8 } } },
       scales: {
-        x:  { grid:{color:'#2e2e40'}, ticks:{color:'#8888aa',font:{size:10}} },
+        x:  { grid:{color:'#2e2e40'}, ticks:{color:'#8888aa',font:{size:10},autoSkip:true,maxTicksLimit:labels.length>40?13:labels.length>14?16:labels.length} },
         y:  { min:0, max:5, grid:{color:'#2e2e40'}, ticks:{color:'#8888aa',font:{size:10},stepSize:1} },
         y2: { min:0, max:100, position:'right', grid:{display:false}, ticks:{color:'rgba(94,216,164,0.7)',font:{size:10}} }
       }
@@ -1854,7 +1849,7 @@ function renderHomePeriodChart() {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend:{display:false} },
       scales: {
-        x: { grid:{color:'#2e2e40'}, ticks:{color:'#8888aa',font:{size:10}} },
+        x: { grid:{color:'#2e2e40'}, ticks:{color:'#8888aa',font:{size:10},autoSkip:true,maxTicksLimit:labels.length>40?13:labels.length>14?16:labels.length} },
         y: { min:0, grid:{color:'#2e2e40'}, ticks:{color:'#8888aa',font:{size:10}} }
       }
     }

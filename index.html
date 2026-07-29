@@ -85,6 +85,8 @@
   .home-card-wrap { flex: 0 0 calc(20% - 8px); box-sizing:border-box; cursor:default; min-width:0; }
   .home-card-wrap.dragging { opacity:0.3; }
   .home-card-wrap.drag-over > .card { outline:2px dashed var(--accent); }
+  .ptab { padding:5px 14px; border-radius:20px; border:1.5px solid var(--border); cursor:pointer; font-size:12px; font-weight:500; background:var(--surface2); color:var(--text-muted); transition:all 0.15s; user-select:none; white-space:nowrap; }
+  .ptab.active { background:var(--accent); color:#fff; border-color:var(--accent); }
   .home-drag-handle {
     float:right; opacity:0; cursor:grab; font-size:13px;
     color:var(--text-muted); transition:opacity 0.15s; letter-spacing:1px;
@@ -514,7 +516,7 @@
 
   /* ── IMPORT ZONE ── */
   .import-zone {
-    border: 1px dashed var(--border);
+    border: 1.5px dashed var(--border);
     border-radius: 8px;
     padding: 18px;
     text-align: center;
@@ -525,6 +527,7 @@
     margin-bottom: 12px;
   }
   .import-zone:hover { border-color: var(--accent); color: var(--text); }
+  .import-zone.drag-over { border-color: var(--accent); background: rgba(124,106,247,0.08); color: var(--text); }
   .import-zone input[type="file"] { display: none; }
 
   /* ── EYE LEGEND ── */
@@ -712,67 +715,21 @@
 
   <div class="stats-row" id="homeStats"></div>
 
-  <div class="home-grid" id="homeGrid">
-    <div class="home-card-wrap" data-key="checklist" draggable="true">
-      <div class="card" style="height:100%">
-        <div class="card-title">오늘 체크리스트 <span class="home-drag-handle">⠿⠿</span></div>
-        <div id="todayChecklist"></div>
-      </div>
+  <!-- 체크리스트 -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">오늘 체크리스트</div>
+    <div id="todayChecklist"></div>
+  </div>
+
+  <!-- 기간별 차트 -->
+  <div class="card">
+    <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
+      <div class="ptab active" id="htab-week"    onclick="setHomePeriod('week')">이번주</div>
+      <div class="ptab"        id="htab-month"   onclick="setHomePeriod('month')">이번달</div>
+      <div class="ptab"        id="htab-quarter" onclick="setHomePeriod('quarter')">이번분기</div>
+      <div class="ptab"        id="htab-year"    onclick="setHomePeriod('year')">1년</div>
     </div>
-    <div class="home-card-wrap" data-key="recentRun" draggable="true">
-      <div class="card" style="height:100%">
-        <div class="card-title">최근 러닝 <span class="home-drag-handle">⠿⠿</span></div>
-        <div id="recentRun"></div>
-      </div>
-    </div>
-    <div class="home-card-wrap" data-key="condChart" draggable="true">
-      <div class="card" style="height:100%">
-        <div class="card-title">컨디션 트렌드 (최근 14일) <span class="home-drag-handle">⠿⠿</span></div>
-        <div class="chart-box"><canvas id="conditionChart"></canvas></div>
-      </div>
-    </div>
-    <div class="home-card-wrap" data-key="runChart" draggable="true">
-      <div class="card" style="height:100%">
-        <div class="card-title">러닝 거리 트렌드 (최근 10회) <span class="home-drag-handle">⠿⠿</span></div>
-        <div class="chart-box"><canvas id="runChart"></canvas></div>
-      </div>
-    </div>
-    <div class="home-card-wrap" data-key="inbodyChart" draggable="true">
-      <div class="card" style="height:100%">
-        <div class="card-title">인바디 트렌드 (최근 10회) <span class="home-drag-handle">⠿⠿</span></div>
-        <div class="chart-box"><canvas id="homeInbodyChart"></canvas></div>
-      </div>
-    </div>
-    <div class="home-card-wrap" data-key="suppChart" draggable="true">
-      <div class="card" style="height:100%">
-        <div class="card-title">영양제 섭취 (최근 14일) <span class="home-drag-handle">⠿⠿</span></div>
-        <div class="chart-box"><canvas id="homeSuppChart"></canvas></div>
-      </div>
-    </div>
-    <div class="home-card-wrap" data-key="fastChart" draggable="true">
-      <div class="card" style="height:100%">
-        <div class="card-title">단식 현황 <span class="home-drag-handle">⠿⠿</span></div>
-        <div id="homeFastCal" class="mini-cal"></div>
-      </div>
-    </div>
-    <div class="home-card-wrap" data-key="eyeChart" draggable="true">
-      <div class="card" style="height:100%">
-        <div class="card-title">눈 상태 (최근 14일) <span class="home-drag-handle">⠿⠿</span></div>
-        <div class="chart-box"><canvas id="homeEyeChart"></canvas></div>
-      </div>
-    </div>
-    <div class="home-card-wrap" data-key="skinChart" draggable="true">
-      <div class="card" style="height:100%">
-        <div class="card-title">피부케어 마스크팩 <span class="home-drag-handle">⠿⠿</span></div>
-        <div id="homeSkinCal" class="mini-cal"></div>
-      </div>
-    </div>
-    <div class="home-card-wrap" data-key="mChart" draggable="true">
-      <div class="card" style="height:100%">
-        <div class="card-title">M / m 현황 (최근 14일) <span class="home-drag-handle">⠿⠿</span></div>
-        <div class="chart-box"><canvas id="homeMChart"></canvas></div>
-      </div>
-    </div>
+    <div id="homePeriodContent"></div>
   </div>
 </div>
 
@@ -1291,10 +1248,16 @@
   <div class="grid-2" style="margin-bottom:16px">
     <div class="card">
       <div class="card-title">Garmin 수면 CSV 가져오기</div>
-      <label class="import-zone" for="sleepFile" style="margin-bottom:8px">
-        📂 Garmin Connect → 수면 → 내보내기(CSV) → 업로드
+      <div id="sleepDropZone" class="import-zone"
+           ondragover="event.preventDefault();this.classList.add('drag-over')"
+           ondragleave="this.classList.remove('drag-over')"
+           ondrop="handleSleepDrop(event)"
+           onclick="document.getElementById('sleepFile').click()"
+           style="margin-bottom:8px">
+        📂 클릭하거나 CSV를 여기에 드래그<br>
+        <span style="font-size:11px;opacity:0.7">Garmin Connect → 수면 → 내보내기(CSV)</span>
         <input type="file" id="sleepFile" accept=".csv" onchange="importSleepCSV(event)">
-      </label>
+      </div>
       <div id="sleepImportResult" style="font-size:12px;color:var(--accent2);min-height:18px"></div>
     </div>
     <div class="card" style="align-self:start">
@@ -1580,214 +1543,318 @@ function renderCal(containerId, titleId, year, month, getMarkClass, selectedDate
 // HOME
 // ═══════════════════════════════════
 let homeCharts = {};
+let homePeriod = 'week';
+
+function setHomePeriod(p) {
+  homePeriod = p;
+  ['week','month','quarter','year'].forEach(k => {
+    const t = document.getElementById('htab-' + k);
+    if (t) t.classList.toggle('active', k === p);
+  });
+  renderHomePeriodChart();
+}
+
 function renderHome() {
   const td = today();
   document.getElementById('homeDate').textContent = fmtDateLong(td);
   document.getElementById('sidebarDate').textContent = fmtDateLong(td);
 
-  const runs = DB.get('runs');
+  const runs  = DB.get('runs');
   const conds = DB.get('conditions');
   const fasts = DB.get('fastings');
-  const eyes = DB.get('eyes');
+  const eyes  = DB.get('eyes');
   const skins = DB.get('skins');
 
-  // Stats
-  const totalKm = runs.reduce((s,r) => s + parseFloat(r.dist||0), 0);
-  const scoredConds = conds.filter(c => c.score);
-  const avgCond = scoredConds.length ? (scoredConds.reduce((s,c) => s+c.score,0)/scoredConds.length).toFixed(1) : '-';
-  const fastCount = fasts.filter(f => f.fasted).length;
-  const eyePainDays = eyes.filter(e => e.pain).length;
+  // ── 전체 통계 칩
+  const totalKm    = runs.reduce((s,r) => s + parseFloat(r.dist||0), 0);
+  const scoredAll  = conds.filter(c => c.score);
+  const avgCond    = scoredAll.length ? (scoredAll.reduce((s,c)=>s+c.score,0)/scoredAll.length).toFixed(1) : '-';
+  const fastCount  = fasts.filter(f => f.fasted).length;
+  const eyePainDays= eyes.filter(e => e.pain).length;
 
   document.getElementById('homeStats').innerHTML = `
     <div class="stat-chip"><div class="lbl">TOTAL DISTANCE</div><div class="val">${totalKm.toFixed(1)}<span style="font-size:16px;font-weight:500;color:var(--text-muted)"> km</span></div></div>
     <div class="stat-chip"><div class="lbl">RUN COUNT</div><div class="val">${runs.length}<span style="font-size:16px;font-weight:500;color:var(--text-muted)"> 회</span></div></div>
-    <div class="stat-chip"><div class="lbl">AVG CONDITION</div><div class="val" style="color:${scoreColor(avgCond)}">${avgCond}<span style="font-size:16px;font-weight:500;color:var(--text-muted)"> /10</span></div></div>
+    <div class="stat-chip"><div class="lbl">AVG CONDITION</div><div class="val" style="color:${scoreColor(avgCond)}">${avgCond}<span style="font-size:16px;font-weight:500;color:var(--text-muted)"> /5</span></div></div>
     <div class="stat-chip"><div class="lbl">FASTING DAYS</div><div class="val" style="color:var(--accent2)">${fastCount}<span style="font-size:16px;font-weight:500;color:var(--text-muted)"> 일</span></div></div>
     <div class="stat-chip"><div class="lbl">EYE PAIN DAYS</div><div class="val" style="color:var(--accent3)">${eyePainDays}<span style="font-size:16px;font-weight:500;color:var(--text-muted)"> 일</span></div></div>
   `;
 
-  // Today checklist
-  const todaySkin = skins.find(s => s.date === td);
+  // ── 오늘 체크리스트
   const todayCond = conds.find(c => c.date === td);
-  const todayFast = fasts.find(f => f.date === td);
-  const todayEye = eyes.find(e => e.date === td);
   const todaySupp = DB.get('suppRecords').find(s => s.date === td);
-
+  const todayFast = fasts.find(f => f.date === td);
+  const todayEye  = eyes.find(e => e.date === td);
+  const todaySkin = skins.find(s => s.date === td);
   document.getElementById('todayChecklist').innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:10px">
-      ${check('컨디션 기록', !!todayCond, 'condition')}
-      ${check('영양제 기록', !!todaySupp, 'supplement')}
-      ${check('저녁 단식 체크', !!todayFast, 'fasting')}
-      ${check('눈 상태 기록', !!todayEye, 'eye')}
-      ${check('피부 케어 기록', !!todaySkin, 'skin')}
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      ${check('컨디션', !!todayCond, 'condition')}
+      ${check('영양제', !!todaySupp, 'supplement')}
+      ${check('단식', !!todayFast, 'fasting')}
+      ${check('눈 상태', !!todayEye, 'eye')}
+      ${check('피부 케어', !!todaySkin, 'skin')}
     </div>
   `;
 
-  // Recent run
-  const lastRun = [...runs].sort((a,b) => b.date.localeCompare(a.date))[0];
-  document.getElementById('recentRun').innerHTML = lastRun
-    ? `<div style="font-size:13px;color:var(--text-muted);margin-bottom:8px">${fmtDateLong(lastRun.date)}</div>
-       <div style="font-size:28px;font-weight:700;color:var(--accent)">${lastRun.dist}<span style="font-size:14px">km</span></div>
-       <div style="color:var(--text-muted);font-size:14px;margin-top:4px">⏱ ${lastRun.time || '-'} · 페이스 ${calcPace(lastRun.dist, lastRun.time)}</div>`
-    : '<div class="empty-state" style="padding:20px">아직 러닝 기록이 없어요 🏃</div>';
+  renderHomePeriodChart();
+}
 
-  // Charts
-  const condLast14 = [...conds].sort((a,b) => a.date.localeCompare(b.date)).slice(-14);
-  const runLast10 = [...runs].sort((a,b) => a.date.localeCompare(b.date)).slice(-10);
+function renderHomePeriodChart() {
+  const content = document.getElementById('homePeriodContent');
+  if (!content) return;
 
-  ['cond','run','inbody','supp','eye','mstat'].forEach(k => {
-    if (homeCharts[k]) { homeCharts[k].destroy(); homeCharts[k] = null; }
-  });
+  const condMap  = {}; DB.get('conditions').forEach(c => condMap[c.date]  = c);
+  const sleepMap = {}; DB.get('sleeps').forEach(s    => sleepMap[s.date]  = s);
+  const runMap   = {}; DB.get('runs').forEach(r      => runMap[r.date]    = r);
+  const fastMap  = {}; DB.get('fastings').forEach(f  => fastMap[f.date]   = f);
+  const eyeMap   = {}; DB.get('eyes').forEach(e      => eyeMap[e.date]    = e);
+  const skinMap  = {}; DB.get('skins').forEach(s     => skinMap[s.date]   = s);
 
-  // ── 컨디션
-  const condCtx = document.getElementById('conditionChart').getContext('2d');
-  homeCharts.cond = new Chart(condCtx, {
-    type: 'line',
-    data: {
-      labels: condLast14.map(c => fmtDate(c.date)),
-      datasets: [{
-        data: condLast14.map(c => c.score),
-        borderColor: '#7c6af7',
-        backgroundColor: 'rgba(124,106,247,0.1)',
-        fill: true, tension: 0.4, pointRadius: 4,
-        pointBackgroundColor: condLast14.map(c => scoreColor(c.score))
-      }]
-    },
-    options: chartOpts(1, 5)
-  });
+  const avg = arr => { const v = arr.filter(x => x != null && !isNaN(x)); return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null; };
+  const sum = arr => { const v = arr.filter(x => x > 0); return v.length ? v.reduce((a,b)=>a+b,0) : null; };
+  const now = new Date();
+  const isDaily = homePeriod === 'week' || homePeriod === 'month';
 
-  // ── 러닝
-  const runCtx = document.getElementById('runChart').getContext('2d');
-  homeCharts.run = new Chart(runCtx, {
-    type: 'bar',
-    data: {
-      labels: runLast10.map(r => fmtDate(r.date)),
-      datasets: [{
-        data: runLast10.map(r => r.dist),
-        backgroundColor: 'rgba(124,106,247,0.6)',
-        borderRadius: 6
-      }]
-    },
-    options: chartOpts(0)
-  });
+  let labels = [], condData = [], sleepData = [], runData = [];
+  let fastData = [], alcoholData = [], eyeData = [], maskData = [], mBigData = [], mSmallData = [];
+  let dateSets = []; // for aggregated periods: array of date-string arrays per bucket
+  let periodTitle = '';
 
-  // ── 최근 14일 날짜 배열 헬퍼
-  function last14() {
-    const arr = [];
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date(); d.setDate(d.getDate() - i);
-      arr.push(d.toISOString().slice(0,10));
+  if (homePeriod === 'week') {
+    const dow = (now.getDay() + 6) % 7;
+    const dayLabels = ['월','화','수','목','금','토','일'];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(now); d.setDate(now.getDate() - dow + i);
+      const ds = d.toISOString().slice(0,10);
+      labels.push(dayLabels[i]);
+      condData.push(condMap[ds]?.score || null);
+      sleepData.push(sleepMap[ds]?.score || null);
+      runData.push(parseFloat(runMap[ds]?.dist) || null);
+      fastData.push(!!(fastMap[ds]?.fasted));
+      alcoholData.push(!!(condMap[ds]?.alcohol));
+      eyeData.push(!!(eyeMap[ds]?.pain));
+      maskData.push(!!(skinMap[ds]?.mask));
+      mBigData.push(!!(condMap[ds]?.mBig));
+      mSmallData.push(!!(condMap[ds]?.mSmall));
     }
-    return arr;
+    periodTitle = `${now.getFullYear()}년 ${now.getMonth()+1}월 이번주`;
   }
-  const dates14 = last14();
-  const labels14 = dates14.map(d => fmtDate(d));
 
-  // ── 인바디
-  const inbodies = DB.get('inbody').sort((a,b) => a.date.localeCompare(b.date)).slice(-10);
-  const ibCtx = document.getElementById('homeInbodyChart').getContext('2d');
-  homeCharts.inbody = new Chart(ibCtx, {
-    type: 'line',
+  if (homePeriod === 'month') {
+    const y = now.getFullYear(), m = now.getMonth();
+    const days = new Date(y, m+1, 0).getDate();
+    for (let d = 1; d <= days; d++) {
+      const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      labels.push(String(d));
+      condData.push(condMap[ds]?.score || null);
+      sleepData.push(sleepMap[ds]?.score || null);
+      runData.push(parseFloat(runMap[ds]?.dist) || null);
+      fastData.push(!!(fastMap[ds]?.fasted));
+      alcoholData.push(!!(condMap[ds]?.alcohol));
+      eyeData.push(!!(eyeMap[ds]?.pain));
+      maskData.push(!!(skinMap[ds]?.mask));
+      mBigData.push(!!(condMap[ds]?.mBig));
+      mSmallData.push(!!(condMap[ds]?.mSmall));
+    }
+    periodTitle = `${now.getFullYear()}년 ${now.getMonth()+1}월`;
+  }
+
+  if (homePeriod === 'quarter') {
+    const qm = Math.floor(now.getMonth()/3)*3;
+    const qStart = new Date(now.getFullYear(), qm, 1);
+    const dow = (qStart.getDay()+6)%7;
+    const cur = new Date(qStart); cur.setDate(qStart.getDate()-dow);
+    while (cur <= now) {
+      const wDates = Array.from({length:7}, (_,i) => {
+        const d = new Date(cur); d.setDate(cur.getDate()+i); return d.toISOString().slice(0,10);
+      });
+      labels.push(`${cur.getMonth()+1}/${cur.getDate()}`);
+      condData.push(avg(wDates.map(d => condMap[d]?.score || null)));
+      sleepData.push(avg(wDates.map(d => sleepMap[d]?.score || null)));
+      runData.push(sum(wDates.map(d => parseFloat(runMap[d]?.dist)||0)));
+      dateSets.push(wDates);
+      fastData.push(wDates.filter(d => fastMap[d]?.fasted).length);
+      alcoholData.push(wDates.filter(d => condMap[d]?.alcohol).length);
+      eyeData.push(wDates.filter(d => eyeMap[d]?.pain).length);
+      maskData.push(wDates.filter(d => skinMap[d]?.mask).length);
+      mBigData.push(wDates.filter(d => condMap[d]?.mBig).length);
+      mSmallData.push(wDates.filter(d => condMap[d]?.mSmall).length);
+      cur.setDate(cur.getDate()+7);
+    }
+    const qNames = ['1분기','2분기','3분기','4분기'];
+    periodTitle = `${now.getFullYear()}년 ${qNames[Math.floor(now.getMonth()/3)]}`;
+  }
+
+  if (homePeriod === 'year') {
+    const y = now.getFullYear();
+    const mNames = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+    for (let m = 0; m < 12; m++) {
+      const days = new Date(y, m+1, 0).getDate();
+      const mDates = Array.from({length:days}, (_,i) =>
+        `${y}-${String(m+1).padStart(2,'0')}-${String(i+1).padStart(2,'0')}`);
+      labels.push(mNames[m]);
+      condData.push(avg(mDates.map(d => condMap[d]?.score || null)));
+      sleepData.push(avg(mDates.map(d => sleepMap[d]?.score || null)));
+      runData.push(sum(mDates.map(d => parseFloat(runMap[d]?.dist)||0)));
+      dateSets.push(mDates);
+      fastData.push(mDates.filter(d => fastMap[d]?.fasted).length);
+      alcoholData.push(mDates.filter(d => condMap[d]?.alcohol).length);
+      eyeData.push(mDates.filter(d => eyeMap[d]?.pain).length);
+      maskData.push(mDates.filter(d => skinMap[d]?.mask).length);
+      mBigData.push(mDates.filter(d => condMap[d]?.mBig).length);
+      mSmallData.push(mDates.filter(d => condMap[d]?.mSmall).length);
+    }
+    periodTitle = `${y}년`;
+  }
+
+  // 기간 요약 통계
+  const pCondAvg = avg(condData);
+  const pSleepAvg = avg(sleepData);
+  const pRunTotal = (runData.filter(v=>v).reduce((a,b)=>a+(b||0),0)).toFixed(1);
+  const pRunCnt = runData.filter(v=>v&&v>0).length;
+  const pFastCnt = isDaily ? fastData.filter(Boolean).length : fastData.reduce((a,b)=>a+b,0);
+  const pEyeCnt  = isDaily ? eyeData.filter(Boolean).length  : eyeData.reduce((a,b)=>a+b,0);
+  const statsHtml = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;padding:10px 12px;background:var(--surface2);border-radius:10px;font-size:12px">
+      <div><span style="color:var(--text-muted)">컨디션</span> <strong style="color:${scoreColor(pCondAvg)}">${pCondAvg ? pCondAvg.toFixed(1) : '-'}</strong></div>
+      <span style="color:var(--border)">·</span>
+      <div><span style="color:var(--text-muted)">수면</span> <strong style="color:#5ed8a4">${pSleepAvg ? Math.round(pSleepAvg) : '-'}점</strong></div>
+      <span style="color:var(--border)">·</span>
+      <div><span style="color:var(--text-muted)">러닝</span> <strong style="color:var(--accent)">${pRunCnt}회·${pRunTotal}km</strong></div>
+      <span style="color:var(--border)">·</span>
+      <div><span style="color:var(--text-muted)">단식</span> <strong style="color:#7c6af7">${pFastCnt}일</strong></div>
+      ${pEyeCnt > 0 ? `<span style="color:var(--border)">·</span><div><span style="color:var(--text-muted)">눈통증</span> <strong style="color:#f7706a">${pEyeCnt}일</strong></div>` : ''}
+    </div>
+  `;
+
+  // 이벤트 섹션
+  let eventHtml = '';
+
+  if (isDaily) {
+    // 도트 그리드 (주: 26px, 월: 12px)
+    const dotSize = homePeriod === 'week' ? 26 : 12;
+    const gap = homePeriod === 'week' ? 4 : 2;
+    const events = [
+      { icon: '🌙', label: '단식',   data: fastData,                    color: '#7c6af7' },
+      { icon: '🏃', label: '러닝',   data: runData.map(v => (v||0)>0),  color: '#7c6af7' },
+      { icon: '🍺', label: '음주',   data: alcoholData,                 color: '#f7c26a' },
+      { icon: '👁', label: '눈통증', data: eyeData,                     color: '#f7706a' },
+      { icon: '🧴', label: '마스크', data: maskData,                    color: '#5ed8a4' },
+      { icon: 'M',  label: '',       data: mBigData,                    color: '#f7706a' },
+      { icon: 'm',  label: '',       data: mSmallData,                  color: '#f7a06a' },
+    ].filter(e => e.data.some(Boolean));
+
+    if (events.length > 0) {
+      const headerRow = homePeriod === 'week'
+        ? `<tr><th style="position:sticky;left:0;background:var(--surface);z-index:2;padding:0 8px 4px 0;min-width:52px"></th>${labels.map(l=>`<th style="padding:0 ${gap/2}px 4px;font-weight:400;color:var(--text-muted);font-size:10px;min-width:${dotSize}px;text-align:center">${l}</th>`).join('')}</tr>`
+        : '';
+      const dataRows = events.map(ev => {
+        const lbl = ev.label ? `${ev.icon} ${ev.label}` : `<strong>${ev.icon}</strong>`;
+        const cells = ev.data.map(v =>
+          `<td style="padding:${gap/2}px"><div style="width:${dotSize}px;height:${dotSize}px;border-radius:50%;background:${v ? ev.color : 'rgba(60,60,80,0.25)'};border:1.5px solid ${v ? ev.color : 'var(--border)'}"></div></td>`
+        ).join('');
+        return `<tr><td style="position:sticky;left:0;background:var(--surface);z-index:1;padding:${gap/2}px 8px ${gap/2}px 0;font-size:11px;color:var(--text-muted);white-space:nowrap">${lbl}</td>${cells}</tr>`;
+      }).join('');
+      eventHtml = `
+        <div style="margin-top:14px">
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">📋 이벤트</div>
+          <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+            <table style="border-collapse:collapse;font-size:11px">${headerRow}${dataRows}</table>
+          </div>
+        </div>`;
+    }
+  } else {
+    // 분기/연간: 전체 기간 이벤트 빈도 막대
+    const totalDays = dateSets.flat().length || labels.length * (homePeriod === 'quarter' ? 7 : 30);
+    const totals = [
+      { icon: '🌙', label: '단식',    count: fastData.reduce((a,b)=>a+b,0),    color: '#7c6af7' },
+      { icon: '🏃', label: '러닝',    count: pRunCnt,                           color: 'var(--accent)' },
+      { icon: '🍺', label: '음주',    count: alcoholData.reduce((a,b)=>a+b,0), color: '#f7c26a' },
+      { icon: '👁', label: '눈통증',  count: eyeData.reduce((a,b)=>a+b,0),     color: '#f7706a' },
+      { icon: '🧴', label: '마스크팩',count: maskData.reduce((a,b)=>a+b,0),    color: '#5ed8a4' },
+      { icon: 'M',  label: '생리(대)',count: mBigData.reduce((a,b)=>a+b,0),    color: '#f7706a' },
+      { icon: 'm',  label: '생리(소)',count: mSmallData.reduce((a,b)=>a+b,0),  color: '#f7a06a' },
+    ].filter(e => e.count > 0);
+
+    if (totals.length > 0) {
+      const maxCount = Math.max(...totals.map(e => e.count));
+      const barsHtml = totals.map(ev => {
+        const pct = Math.round(ev.count / totalDays * 100);
+        const barW = Math.max(2, Math.round(ev.count / maxCount * 100));
+        return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+          <div style="min-width:72px;font-size:11px;color:var(--text-muted);flex-shrink:0">${ev.icon} ${ev.label}</div>
+          <div style="flex:1;height:14px;background:var(--surface2);border-radius:7px;overflow:hidden">
+            <div style="height:100%;width:${barW}%;background:${ev.color};border-radius:7px"></div>
+          </div>
+          <div style="min-width:40px;font-size:11px;color:var(--text-muted);text-align:right">${ev.count}일·${pct}%</div>
+        </div>`;
+      }).join('');
+      eventHtml = `
+        <div style="margin-top:14px">
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">📋 이벤트 빈도</div>
+          ${barsHtml}
+        </div>`;
+    }
+  }
+
+  // 차트 HTML 세팅
+  content.innerHTML = `
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">${periodTitle}</div>
+    ${statsHtml}
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">😊 컨디션 <span style="color:#5ed8a4">· 수면점수</span></div>
+    <div class="chart-box" style="height:160px;margin-bottom:14px"><canvas id="hpCondChart"></canvas></div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">🏃 러닝 (km)</div>
+    <div class="chart-box" style="height:90px;margin-bottom:0"><canvas id="hpRunChart"></canvas></div>
+    ${eventHtml}
+  `;
+
+  // 차트 생성
+  if (homeCharts.hpCond) { homeCharts.hpCond.destroy(); homeCharts.hpCond = null; }
+  if (homeCharts.hpRun)  { homeCharts.hpRun.destroy();  homeCharts.hpRun  = null; }
+
+  homeCharts.hpCond = new Chart(document.getElementById('hpCondChart').getContext('2d'), {
+    type: 'bar',
     data: {
-      labels: inbodies.map(i => fmtDate(i.date)),
+      labels,
       datasets: [
-        { label: '체중(kg)', data: inbodies.map(i => parseFloat(i.weight)||null),
-          borderColor: '#7c6af7', backgroundColor: 'rgba(124,106,247,0.08)',
-          fill: false, tension: 0.4, pointRadius: 4, yAxisID: 'y' },
-        { label: '근육(kg)', data: inbodies.map(i => parseFloat(i.muscle)||null),
-          borderColor: '#5ed8a4', backgroundColor: 'transparent',
-          fill: false, tension: 0.4, pointRadius: 4, yAxisID: 'y' },
-        { label: '체지방(%)', data: inbodies.map(i => parseFloat(i.fat)||null),
-          borderColor: '#f76a6a', backgroundColor: 'transparent',
-          fill: false, tension: 0.4, pointRadius: 4, yAxisID: 'y2' }
+        {
+          type: 'bar', label: '컨디션',
+          data: condData,
+          backgroundColor: condData.map(s => !s ? 'rgba(60,60,80,0.2)' : s >= 5 ? 'rgba(94,216,164,0.85)' : s >= 4 ? 'rgba(124,106,247,0.85)' : s >= 3 ? 'rgba(247,194,106,0.85)' : 'rgba(247,106,106,0.85)'),
+          borderRadius: 4, yAxisID: 'y', order: 2
+        },
+        {
+          type: 'line', label: '수면',
+          data: sleepData,
+          borderColor: 'rgba(94,216,164,0.9)', backgroundColor: 'transparent',
+          pointRadius: 3, pointBackgroundColor: 'rgba(94,216,164,0.9)',
+          tension: 0.3, spanGaps: true, yAxisID: 'y2', order: 1
+        }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: true, labels: { color: '#8888aa', font: { size: 10 }, boxWidth: 12, padding: 8 } } },
+      plugins: { legend: { display: true, labels: { color:'#8888aa', font:{size:10}, boxWidth:12, padding:8 } } },
       scales: {
-        x: { grid: { color: '#2e2e40' }, ticks: { color: '#8888aa', font: { size: 10 } } },
-        y: { grid: { color: '#2e2e40' }, ticks: { color: '#8888aa', font: { size: 10 } }, position: 'left' },
-        y2: { grid: { display: false }, ticks: { color: '#f76a6a', font: { size: 10 } }, position: 'right' }
+        x:  { grid:{color:'#2e2e40'}, ticks:{color:'#8888aa',font:{size:10}} },
+        y:  { min:0, max:5, grid:{color:'#2e2e40'}, ticks:{color:'#8888aa',font:{size:10},stepSize:1} },
+        y2: { min:0, max:100, position:'right', grid:{display:false}, ticks:{color:'rgba(94,216,164,0.7)',font:{size:10}} }
       }
     }
   });
 
-  // ── 영양제 (하루에 먹은 종류 수)
-  const suppMap = {};
-  DB.get('suppRecords').forEach(r => { suppMap[r.date] = (r.list||[]).length; });
-  const suppCtx = document.getElementById('homeSuppChart').getContext('2d');
-  homeCharts.supp = new Chart(suppCtx, {
+  homeCharts.hpRun = new Chart(document.getElementById('hpRunChart').getContext('2d'), {
     type: 'bar',
     data: {
-      labels: labels14,
-      datasets: [{
-        label: '섭취 종류 수',
-        data: dates14.map(d => suppMap[d] || 0),
-        backgroundColor: dates14.map(d => suppMap[d] ? 'rgba(247,194,106,0.7)' : 'rgba(247,194,106,0.15)'),
-        borderRadius: 5
-      }]
-    },
-    options: { ...chartOpts(0), plugins: { legend: { display: false } } }
-  });
-
-  // ── 단식 미니 달력
-  const fastMapCal = {};
-  DB.get('fastings').forEach(r => { if (r.fasted) fastMapCal[r.date] = true; });
-  renderMiniHomeCal('homeFastCal', d => !!fastMapCal[d], 'mini-fast');
-
-  // ── 눈 상태
-  const eyeMap = {};
-  DB.get('eyes').forEach(r => { eyeMap[r.date] = r; });
-  const eyeCtx = document.getElementById('homeEyeChart').getContext('2d');
-  homeCharts.eye = new Chart(eyeCtx, {
-    type: 'bar',
-    data: {
-      labels: labels14,
-      datasets: [
-        { label: '통증', data: dates14.map(d => eyeMap[d]?.pain ? 1 : 0),
-          backgroundColor: 'rgba(247,106,106,0.7)', borderRadius: 4 },
-        { label: '안약', data: dates14.map(d => eyeMap[d]?.drop ? 1 : 0),
-          backgroundColor: 'rgba(247,194,106,0.7)', borderRadius: 4 }
-      ]
+      labels,
+      datasets: [{ label:'km', data:runData, backgroundColor:'rgba(124,106,247,0.7)', borderRadius:4 }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: true, labels: { color: '#8888aa', font: { size: 10 }, boxWidth: 10, padding: 6 } } },
+      plugins: { legend:{display:false} },
       scales: {
-        x: { grid: { color: '#2e2e40' }, ticks: { color: '#8888aa', font: { size: 10 } } },
-        y: { display: false, min: 0, max: 1 },
-        x: { stacked: false }
-      }
-    }
-  });
-
-  // ── 피부케어 미니 달력
-  const skinMapCal = {};
-  DB.get('skins').forEach(r => { if (r.mask) skinMapCal[r.date] = true; });
-  renderMiniHomeCal('homeSkinCal', d => !!skinMapCal[d], 'mini-skin');
-
-  // ── M / m 현황
-  const condMap = {};
-  DB.get('conditions').forEach(r => { condMap[r.date] = r; });
-  const mCtx = document.getElementById('homeMChart').getContext('2d');
-  homeCharts.mstat = new Chart(mCtx, {
-    type: 'bar',
-    data: {
-      labels: labels14,
-      datasets: [
-        { label: 'M', data: dates14.map(d => condMap[d]?.mBig ? 1 : 0),
-          backgroundColor: 'rgba(124,106,247,0.75)', borderRadius: 4 },
-        { label: 'm', data: dates14.map(d => condMap[d]?.mSmall ? 1 : 0),
-          backgroundColor: 'rgba(94,216,164,0.75)', borderRadius: 4 }
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: true, labels: { color: '#8888aa', font: { size: 10 }, boxWidth: 10, padding: 6 } } },
-      scales: {
-        x: { grid: { color: '#2e2e40' }, ticks: { color: '#8888aa', font: { size: 10 } } },
-        y: { display: false, min: 0, max: 1 }
+        x: { grid:{color:'#2e2e40'}, ticks:{color:'#8888aa',font:{size:10}} },
+        y: { min:0, grid:{color:'#2e2e40'}, ticks:{color:'#8888aa',font:{size:10}} }
       }
     }
   });
@@ -1818,14 +1885,8 @@ function renderMiniHomeCal(containerId, highlightFn, markClass) {
 }
 
 function check(label, done, page) {
-  return `<div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="navigate('${page}')">
-    <div style="width:20px;height:20px;border-radius:50%;border:2px solid ${done ? 'var(--accent2)' : 'var(--border)'};
-      background:${done ? 'rgba(94,216,164,0.2)' : 'transparent'};
-      display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--accent2)">
-      ${done ? '✓' : ''}
-    </div>
-    <span style="font-size:14px;color:${done ? 'var(--text)' : 'var(--text-muted)'};text-decoration:${done ? 'none' : 'none'}">${label}</span>
-    ${done ? '<span class="tag green" style="margin-left:auto;font-size:11px">완료</span>' : '<span style="margin-left:auto;font-size:11px;color:var(--text-muted)">→</span>'}
+  return `<div onclick="navigate('${page}')" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;cursor:pointer;border:1.5px solid ${done?'var(--accent2)':'var(--border)'};background:${done?'rgba(94,216,164,0.12)':'var(--surface2)'};font-size:13px;color:${done?'var(--accent2)':'var(--text-muted)'}">
+    <span style="font-size:12px">${done?'✓':'○'}</span> ${label}
   </div>`;
 }
 
@@ -2181,14 +2242,26 @@ function renderRunning() {
   }).join('');
 }
 
+function handleSleepDrop(event) {
+  event.preventDefault();
+  event.currentTarget.classList.remove('drag-over');
+  const file = event.dataTransfer.files[0];
+  if (file) importSleepCSVFile(file);
+}
+
 function importSleepCSV(event) {
   const file = event.target.files[0];
-  if (!file) return;
+  if (file) importSleepCSVFile(file);
+  event.target.value = '';
+}
+
+function importSleepCSVFile(file) {
   const reader = new FileReader();
   reader.onload = e => {
     const text = e.target.result;
     const lines = text.split('\n').filter(l => l.trim());
-    if (lines.length < 2) { document.getElementById('sleepImportResult').textContent = '데이터가 없습니다.'; return; }
+    const resultEl = document.getElementById('sleepImportResult');
+    if (lines.length < 2) { resultEl.textContent = '데이터가 없습니다.'; return; }
 
     // CSV 파싱 (따옴표 안 쉼표 처리)
     function parseCSVLine(line) {
@@ -2203,40 +2276,56 @@ function importSleepCSV(event) {
       return result;
     }
 
-    const header = parseCSVLine(lines[0]).map(h => h.replace(/"/g,'').toLowerCase());
-
-    // 컬럼 인덱스 탐색
+    const header = parseCSVLine(lines[0]).map(h => h.replace(/"/g,'').toLowerCase().trim());
     const find = (...keys) => header.findIndex(h => keys.some(k => h.includes(k)));
-    const dateIdx    = find('date','날짜','일자');
-    const scoreIdx   = find('sleep score','수면 점수','수면점수','score');
-    const durIdx     = find('total sleep','수면 시간','수면시간','duration','총 수면');
-    const neededIdx  = find('sleep need','필요 수면','목표 수면','needed');
-    const bedIdx     = find('bedtime','취침','bed time','수면 시작');
-    const wakeIdx    = find('wake','기상','wake time','수면 종료');
-    const rhrIdx     = find('resting heart','안정시 심박','rhr','rest heart');
-    const hrvIdx     = find('hrv');
-    const bbIdx      = find('body battery','바디 배터리','bodybattery');
+
+    // 날짜: Garmin 한국어 CSV는 첫 컬럼이 항상 날짜 (헤더가 '수면 점수 4주' 등)
+    let dateIdx = find('date','날짜','일자');
+    if (dateIdx < 0) {
+      // 첫 번째 컬럼 데이터가 YYYY-MM-DD 형태인지 확인
+      const sample = (parseCSVLine(lines[1])[0] || '').replace(/"/g,'').trim();
+      if (/^\d{4}[-./]/.test(sample)) dateIdx = 0;
+    }
+
+    // 점수: 날짜 컬럼 건너뛰고 탐색 ('점수', 'score', 'sleep score' 등)
+    const scoreIdx = (() => {
+      for (let i = 0; i < header.length; i++) {
+        if (i === dateIdx) continue;
+        if (['sleep score','수면점수','score','점수'].some(k => header[i].includes(k))) return i;
+      }
+      return -1;
+    })();
 
     if (dateIdx < 0 || scoreIdx < 0) {
-      document.getElementById('sleepImportResult').textContent = '❌ 날짜/수면점수 컬럼을 찾지 못했어요. Garmin 수면 CSV를 확인하세요.';
+      resultEl.textContent = '❌ 날짜/수면점수 컬럼을 찾지 못했어요. Garmin 수면 CSV를 확인하세요.';
       return;
     }
 
+    // 나머지 컬럼 (Garmin 한국어 헤더 포함)
+    const durIdx     = find('지속','total sleep','수면 시간','수면시간','duration','총 수면');
+    const neededIdx  = find('필요량','sleep need','필요 수면','목표 수면','needed');
+    const bedIdx     = find('취침','bedtime','bed time','수면 시작');
+    const wakeIdx    = find('기상','wake','wake time','수면 종료');
+    const rhrIdx     = find('심박수','resting heart','안정시 심박','rhr','rest heart');
+    const hrvIdx     = find('hrv');
+    const bbIdx      = find('바디 배터리','body battery','bodybattery');
+
+    // 시간 문자열 → 분 변환 ("7h 58분", "7:23", "7h 23m", "443" 모두 지원)
     const toMin = str => {
       if (!str) return null;
       str = str.replace(/"/g,'').trim();
-      // "7:23" or "7h 23m" or "443" (minutes)
-      const hm = str.match(/(\d+)[h시:\s]+(\d+)/);
+      if (str === '--' || str === '') return null;
+      const hm = str.match(/(\d+)\s*[h시:]\s*(\d+)/);
       if (hm) return parseInt(hm[1]) * 60 + parseInt(hm[2]);
-      const m = str.match(/^(\d+)$/);
-      if (m) return parseInt(m[1]);
+      const mo = str.match(/^(\d+)m?$/);
+      if (mo) return parseInt(mo[1]);
       return null;
     };
 
     const qualityLabel = s => s >= 85 ? '매우 좋음' : s >= 75 ? '좋음' : s >= 65 ? '보통' : '낮음';
 
     const sleeps = DB.get('sleeps');
-    let added = 0, updated = 0;
+    let added = 0, updated = 0, skipped = 0;
 
     for (let i = 1; i < lines.length; i++) {
       const cols = parseCSVLine(lines[i]).map(c => c.replace(/"/g,'').trim());
@@ -2247,18 +2336,19 @@ function importSleepCSV(event) {
       if (!dateMatch) continue;
       const date = `${dateMatch[1]}-${dateMatch[2].padStart(2,'0')}-${dateMatch[3].padStart(2,'0')}`;
 
-      const scoreRaw = scoreIdx >= 0 ? cols[scoreIdx] : '';
+      const scoreRaw = cols[scoreIdx] || '';
+      if (scoreRaw === '--' || scoreRaw === '') { skipped++; continue; }
       const score = parseInt(scoreRaw);
-      if (isNaN(score) || score < 1) continue;
+      if (isNaN(score) || score < 1) { skipped++; continue; }
 
-      const duration = durIdx >= 0 ? toMin(cols[durIdx]) : null;
-      const needed   = neededIdx >= 0 ? toMin(cols[neededIdx]) : null;
-      const bedtime  = bedIdx >= 0 ? cols[bedIdx] : '';
-      const wakeTime = wakeIdx >= 0 ? cols[wakeIdx] : '';
-      const rhr      = rhrIdx >= 0 ? (parseInt(cols[rhrIdx]) || null) : null;
-      const hrv      = hrvIdx >= 0 ? (parseInt(cols[hrvIdx]) || null) : null;
-      const bodyBattery = bbIdx >= 0 ? (parseInt(cols[bbIdx]) || null) : null;
-      const quality  = qualityLabel(score);
+      const duration    = durIdx     >= 0 ? toMin(cols[durIdx])             : null;
+      const needed      = neededIdx  >= 0 ? toMin(cols[neededIdx])          : null;
+      const bedtime     = bedIdx     >= 0 ? cols[bedIdx]                    : '';
+      const wakeTime    = wakeIdx    >= 0 ? cols[wakeIdx]                   : '';
+      const rhr         = rhrIdx     >= 0 ? (parseInt(cols[rhrIdx]) || null): null;
+      const hrv         = hrvIdx     >= 0 ? (parseInt(cols[hrvIdx]) || null): null;
+      const bodyBattery = bbIdx      >= 0 ? (parseInt(cols[bbIdx])  || null): null;
+      const quality     = qualityLabel(score);
 
       const rec = { id: Date.now() + i, date, score, quality, duration, needed, bedtime, wakeTime, rhr, hrv, bodyBattery };
       const idx = sleeps.findIndex(s => s.date === date);
@@ -2267,8 +2357,7 @@ function importSleepCSV(event) {
     }
 
     DB.set('sleeps', sleeps);
-    event.target.value = '';
-    document.getElementById('sleepImportResult').textContent = `✓ ${added}개 추가, ${updated}개 업데이트`;
+    resultEl.textContent = `✓ ${added}개 추가, ${updated}개 업데이트${skipped > 0 ? ` (${skipped}개 데이터 없음 건너뜀)` : ''}`;
     renderSleep();
     notifyDataChanged();
   };
@@ -4415,8 +4504,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   restoreNavOrder();
   initDragSort();
-  restoreHomeOrder();
-  initHomeDrag();
   document.getElementById('sidebarDate').textContent = fmtDateLong(today());
   renderHome();
 

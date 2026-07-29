@@ -669,6 +669,9 @@
     <div class="nav-item" data-page="analysis" draggable="true" onclick="navigate('analysis')">
       <span class="nav-icon">🔬</span> 컨디션 분석 <span class="nav-drag-handle">⠿⠿</span>
     </div>
+    <div class="nav-item" data-page="habit" draggable="true" onclick="navigate('habit')">
+      <span class="nav-icon">🎯</span> 습관 관리 <span class="nav-drag-handle">⠿⠿</span>
+    </div>
   </nav>
   <div class="sidebar-date" id="sidebarDate"></div>
   <div class="sync-bar">
@@ -1361,6 +1364,36 @@
   </div>
 </div>
 
+<!-- ════════════════ HABIT ════════════════ -->
+<div class="page" id="page-habit">
+  <div class="page-header">
+    <h1>🎯 습관 관리</h1>
+    <p>시작한 습관을 기록하고 컨디션 분석에 활용하세요</p>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">새 습관 추가</div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>습관 이름</label>
+        <input type="text" id="habitName" placeholder="예: 냉수샤워, 명상, 스트레칭..." onkeydown="if(event.key==='Enter')addHabit()">
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>시작 날짜</label>
+        <input type="date" id="habitStart">
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <input type="checkbox" id="habitAnalysis" style="width:16px;height:16px;accent-color:var(--accent)">
+        <label for="habitAnalysis" style="font-size:13px;cursor:pointer">컨디션 분석에 포함</label>
+      </div>
+      <button class="btn btn-primary" style="width:100%" onclick="addHabit()">추가</button>
+    </div>
+    <div class="card">
+      <div class="card-title">습관 목록</div>
+      <div id="habitList"><div class="empty-state">아직 등록된 습관이 없어요 🎯</div></div>
+    </div>
+  </div>
+</div>
+
 </main>
 
 <script>
@@ -1407,6 +1440,7 @@ function renderPage(page) {
   if (page === 'fasting') renderFasting();
   if (page === 'sleep') renderSleep();
   if (page === 'analysis') renderAnalysis();
+  if (page === 'habit') renderHabits();
 }
 
 // ═══════════════════════════════════
@@ -3402,6 +3436,14 @@ function renderAnalysis() {
     { key:'m',    label:'m',             col:'#f7c26a',  desc:'' },
   ];
 
+  // 습관 팩터 동적 추가 (inAnalysis: true인 것만)
+  const habits = DB.get('habits').filter(h => h.inAnalysis);
+  habits.forEach(h => {
+    const hKey = 'habit_' + h.id;
+    BASE[hKey] = d => d >= h.startDate && (!h.endDate || d <= h.endDate);
+    FACTORS.push({ key: hKey, label: '🎯 ' + h.name, col: '#34d399', desc: `${h.startDate}${h.endDate?' ~ '+h.endDate:' ~'}` });
+  });
+
   // Pre-compute all factor × window effects
   const EFF = {}; // EFF[factorKey][windowKey]
   FACTORS.forEach(f => {
@@ -3704,6 +3746,84 @@ function renderAnalysis() {
     const el = document.getElementById(id); if (el) el.innerHTML = '';
   });
 
+}
+
+// ═══════════════════════════════════
+// HABIT
+// ═══════════════════════════════════
+function addHabit() {
+  const name = document.getElementById('habitName').value.trim();
+  const startDate = document.getElementById('habitStart').value || today();
+  const inAnalysis = document.getElementById('habitAnalysis').checked;
+  if (!name) { alert('습관 이름을 입력하세요'); return; }
+  const habits = DB.get('habits');
+  habits.push({ id: Date.now(), name, startDate, endDate: null, inAnalysis });
+  DB.set('habits', habits);
+  document.getElementById('habitName').value = '';
+  document.getElementById('habitAnalysis').checked = false;
+  renderHabits();
+  notifyDataChanged();
+}
+
+function endHabit(id) {
+  const date = prompt('종료 날짜 입력 (YYYY-MM-DD):', today());
+  if (!date) return;
+  const habits = DB.get('habits');
+  const h = habits.find(h => h.id === id);
+  if (h) h.endDate = date;
+  DB.set('habits', habits);
+  renderHabits();
+  notifyDataChanged();
+}
+
+function deleteHabit(id) {
+  if (!confirm('삭제하시겠습니까?')) return;
+  DB.set('habits', DB.get('habits').filter(h => h.id !== id));
+  renderHabits();
+  notifyDataChanged();
+}
+
+function toggleHabitAnalysis(id) {
+  const habits = DB.get('habits');
+  const h = habits.find(h => h.id === id);
+  if (h) h.inAnalysis = !h.inAnalysis;
+  DB.set('habits', habits);
+  renderHabits();
+  notifyDataChanged();
+}
+
+function renderHabits() {
+  const habits = DB.get('habits').sort((a,b) => b.startDate.localeCompare(a.startDate));
+  const el = document.getElementById('habitList');
+  if (!el) return;
+  if (!habits.length) { el.innerHTML = '<div class="empty-state">아직 등록된 습관이 없어요 🎯</div>'; return; }
+  el.innerHTML = habits.map(h => {
+    const active = !h.endDate;
+    const days = (() => {
+      const s = new Date(h.startDate + 'T00:00:00');
+      const e = h.endDate ? new Date(h.endDate + 'T00:00:00') : new Date();
+      return Math.max(0, Math.floor((e - s) / 86400000) + 1);
+    })();
+    return `<div style="padding:12px;background:var(--surface2);border-radius:10px;margin-bottom:10px;border-left:3px solid ${active?'var(--accent)':'var(--border)'}">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div style="font-weight:600;font-size:14px">${h.name}</div>
+        <div style="display:flex;gap:6px">
+          ${active ? `<button class="btn btn-outline" style="font-size:11px;padding:3px 8px" onclick="endHabit(${h.id})">종료</button>` : ''}
+          <button class="btn btn-danger" style="font-size:11px;padding:3px 8px" onclick="deleteHabit(${h.id})">삭제</button>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">
+        📅 ${h.startDate}${h.endDate ? ` → ${h.endDate}` : ' → 진행 중'} &nbsp;·&nbsp; <b style="color:${active?'var(--accent)':'var(--text-muted)'}">${days}일</b>
+        <span style="margin-left:6px;padding:2px 7px;border-radius:10px;font-size:10px;background:${active?'rgba(124,106,247,0.15)':'var(--surface2)'};color:${active?'var(--accent)':'var(--text-muted)'}">${active?'진행 중':'종료'}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px">
+        <div onclick="toggleHabitAnalysis(${h.id})" style="width:32px;height:18px;border-radius:9px;background:${h.inAnalysis?'var(--accent)':'var(--border)'};cursor:pointer;position:relative;transition:background 0.2s">
+          <div style="position:absolute;top:2px;left:${h.inAnalysis?'16px':'2px'};width:14px;height:14px;border-radius:50%;background:#fff;transition:left 0.2s"></div>
+        </div>
+        <span style="color:${h.inAnalysis?'var(--accent)':'var(--text-muted)'}">컨디션 분석에 포함</span>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ═══════════════════════════════════
@@ -4075,7 +4195,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ═══════════════════════════════════
 // GITHUB GIST SYNC
 // ═══════════════════════════════════
-const SYNC_KEYS = ['conditions','runs','fastings','eyes','skins','sleeps','suppRecords','suppTypes','inbody','runnerGoal'];
+const SYNC_KEYS = ['conditions','runs','fastings','eyes','skins','sleeps','suppRecords','suppTypes','inbody','runnerGoal','habits','skinPackTypes','skinEveningTypes'];
 
 const GistSync = {
   get token()  { return localStorage.getItem('gist_token')  || ''; },

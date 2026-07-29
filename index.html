@@ -1331,6 +1331,12 @@
   <div class="page-header">
     <h1>🔬 컨디션 분석</h1>
     <p>당일 · D-1 · D2~3 · D7 시간창별 요인 분석</p>
+    <div style="margin-top:10px">
+      <div onclick="toggleAnalysisOffOnly()" id="analysisOffFilter"
+        style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;border:1.5px solid var(--border);cursor:pointer;font-size:13px;background:var(--surface2);color:var(--text-muted);transition:all 0.2s;user-select:none">
+        🏠 오프날만 보기
+      </div>
+    </div>
   </div>
 
   <!-- 요약 + 트렌드 -->
@@ -3440,8 +3446,29 @@ function renderSleep() {
 }
 
 let analysisCharts = {};
+let analysisOffOnly = false;
+
+function toggleAnalysisOffOnly() {
+  analysisOffOnly = !analysisOffOnly;
+  const btn = document.getElementById('analysisOffFilter');
+  if (btn) {
+    btn.style.background = analysisOffOnly ? 'var(--accent)' : 'var(--surface2)';
+    btn.style.color = analysisOffOnly ? '#fff' : 'var(--text-muted)';
+    btn.style.borderColor = analysisOffOnly ? 'var(--accent)' : 'var(--border)';
+  }
+  renderAnalysis();
+}
+
 function renderAnalysis() {
-  const conds  = DB.get('conditions').sort((a,b) => a.date.localeCompare(b.date));
+  const allConds = DB.get('conditions').sort((a,b) => a.date.localeCompare(b.date));
+  const conds = analysisOffOnly ? allConds.filter(c => c.workType === '오프') : allConds;
+  // 필터 버튼 상태 동기화
+  const btn = document.getElementById('analysisOffFilter');
+  if (btn) {
+    btn.style.background = analysisOffOnly ? 'var(--accent)' : 'var(--surface2)';
+    btn.style.color = analysisOffOnly ? '#fff' : 'var(--text-muted)';
+    btn.style.borderColor = analysisOffOnly ? 'var(--accent)' : 'var(--border)';
+  }
   const eyes   = DB.get('eyes');
   const fasts  = DB.get('fastings');
   const supps  = DB.get('suppRecords');
@@ -3578,6 +3605,7 @@ function renderAnalysis() {
 
   // 데이터 안정성 등급
   const nConds = conds.length;
+  const filterLabel = analysisOffOnly ? ' (오프날)' : '';
   const stability = nConds >= 30 ? { label:'안정', col:'#5ed8a4', pct:100 }
     : nConds >= 14 ? { label:'보통', col:'#f7c26a', pct: Math.round(nConds/30*100) }
     : { label:'부족', col:'#f76a6a', pct: Math.round(nConds/30*100) };
@@ -3588,7 +3616,7 @@ function renderAnalysis() {
       <div style="font-size:11px;color:var(--text-muted)" id="analysisUpdateTime"></div>
     </div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:8px 10px;background:var(--surface2);border-radius:8px">
-      <div style="font-size:12px;color:var(--text-muted);white-space:nowrap">데이터 ${nConds}일</div>
+      <div style="font-size:12px;color:var(--text-muted);white-space:nowrap">데이터 ${nConds}일${filterLabel}</div>
       <div style="flex:1;background:var(--bg);border-radius:4px;height:6px;overflow:hidden">
         <div style="width:${stability.pct}%;height:100%;background:${stability.col};border-radius:4px;transition:width 0.5s"></div>
       </div>

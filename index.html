@@ -1288,6 +1288,29 @@
     <p>Garmin Connect 수면 데이터 기반 분석</p>
   </div>
 
+  <div class="grid-2" style="margin-bottom:16px">
+    <div class="card">
+      <div class="card-title">Garmin 수면 CSV 가져오기</div>
+      <label class="import-zone" for="sleepFile" style="margin-bottom:8px">
+        📂 Garmin Connect → 수면 → 내보내기(CSV) → 업로드
+        <input type="file" id="sleepFile" accept=".csv" onchange="importSleepCSV(event)">
+      </label>
+      <div id="sleepImportResult" style="font-size:12px;color:var(--accent2);min-height:18px"></div>
+    </div>
+    <div class="card" style="align-self:start">
+      <div class="card-title">CSV 컬럼 안내</div>
+      <div style="font-size:12px;color:var(--text-muted);line-height:1.8">
+        자동으로 인식하는 컬럼:
+        <div>• 날짜 / Date</div>
+        <div>• 수면 점수 / Sleep Score</div>
+        <div>• 수면 시간 / Total Sleep</div>
+        <div>• 취침 / Bedtime &nbsp; 기상 / Wake</div>
+        <div>• 심박수 / Heart Rate &nbsp; HRV</div>
+        <div>• 바디 배터리 / Body Battery</div>
+      </div>
+    </div>
+  </div>
+
   <div class="stats-row" id="sleepStats"></div>
 
   <div class="grid-2" style="margin-bottom:16px">
@@ -2156,6 +2179,100 @@ function renderRunning() {
       <td><button class="btn btn-danger" onclick="deleteRun(${r.id})">삭제</button></td>
     </tr>`;
   }).join('');
+}
+
+function importSleepCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const text = e.target.result;
+    const lines = text.split('\n').filter(l => l.trim());
+    if (lines.length < 2) { document.getElementById('sleepImportResult').textContent = '데이터가 없습니다.'; return; }
+
+    // CSV 파싱 (따옴표 안 쉼표 처리)
+    function parseCSVLine(line) {
+      const result = [];
+      let cur = '', inQ = false;
+      for (const ch of line) {
+        if (ch === '"') { inQ = !inQ; }
+        else if (ch === ',' && !inQ) { result.push(cur.trim()); cur = ''; }
+        else { cur += ch; }
+      }
+      result.push(cur.trim());
+      return result;
+    }
+
+    const header = parseCSVLine(lines[0]).map(h => h.replace(/"/g,'').toLowerCase());
+
+    // 컬럼 인덱스 탐색
+    const find = (...keys) => header.findIndex(h => keys.some(k => h.includes(k)));
+    const dateIdx    = find('date','날짜','일자');
+    const scoreIdx   = find('sleep score','수면 점수','수면점수','score');
+    const durIdx     = find('total sleep','수면 시간','수면시간','duration','총 수면');
+    const neededIdx  = find('sleep need','필요 수면','목표 수면','needed');
+    const bedIdx     = find('bedtime','취침','bed time','수면 시작');
+    const wakeIdx    = find('wake','기상','wake time','수면 종료');
+    const rhrIdx     = find('resting heart','안정시 심박','rhr','rest heart');
+    const hrvIdx     = find('hrv');
+    const bbIdx      = find('body battery','바디 배터리','bodybattery');
+
+    if (dateIdx < 0 || scoreIdx < 0) {
+      document.getElementById('sleepImportResult').textContent = '❌ 날짜/수면점수 컬럼을 찾지 못했어요. Garmin 수면 CSV를 확인하세요.';
+      return;
+    }
+
+    const toMin = str => {
+      if (!str) return null;
+      str = str.replace(/"/g,'').trim();
+      // "7:23" or "7h 23m" or "443" (minutes)
+      const hm = str.match(/(\d+)[h시:\s]+(\d+)/);
+      if (hm) return parseInt(hm[1]) * 60 + parseInt(hm[2]);
+      const m = str.match(/^(\d+)$/);
+      if (m) return parseInt(m[1]);
+      return null;
+    };
+
+    const qualityLabel = s => s >= 85 ? '매우 좋음' : s >= 75 ? '좋음' : s >= 65 ? '보통' : '낮음';
+
+    const sleeps = DB.get('sleeps');
+    let added = 0, updated = 0;
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = parseCSVLine(lines[i]).map(c => c.replace(/"/g,'').trim());
+      if (cols.length < 2) continue;
+
+      const rawDate = cols[dateIdx] || '';
+      const dateMatch = rawDate.match(/(\d{4})[.\-\/](\d{1,2})[.\-\/](\d{1,2})/);
+      if (!dateMatch) continue;
+      const date = `${dateMatch[1]}-${dateMatch[2].padStart(2,'0')}-${dateMatch[3].padStart(2,'0')}`;
+
+      const scoreRaw = scoreIdx >= 0 ? cols[scoreIdx] : '';
+      const score = parseInt(scoreRaw);
+      if (isNaN(score) || score < 1) continue;
+
+      const duration = durIdx >= 0 ? toMin(cols[durIdx]) : null;
+      const needed   = neededIdx >= 0 ? toMin(cols[neededIdx]) : null;
+      const bedtime  = bedIdx >= 0 ? cols[bedIdx] : '';
+      const wakeTime = wakeIdx >= 0 ? cols[wakeIdx] : '';
+      const rhr      = rhrIdx >= 0 ? (parseInt(cols[rhrIdx]) || null) : null;
+      const hrv      = hrvIdx >= 0 ? (parseInt(cols[hrvIdx]) || null) : null;
+      const bodyBattery = bbIdx >= 0 ? (parseInt(cols[bbIdx]) || null) : null;
+      const quality  = qualityLabel(score);
+
+      const rec = { id: Date.now() + i, date, score, quality, duration, needed, bedtime, wakeTime, rhr, hrv, bodyBattery };
+      const idx = sleeps.findIndex(s => s.date === date);
+      if (idx >= 0) { sleeps[idx] = { ...sleeps[idx], ...rec }; updated++; }
+      else { sleeps.push(rec); added++; }
+    }
+
+    DB.set('sleeps', sleeps);
+    event.target.value = '';
+    document.getElementById('sleepImportResult').textContent = `✓ ${added}개 추가, ${updated}개 업데이트`;
+    renderSleep();
+    notifyDataChanged();
+  };
+  reader.readAsText(file, 'UTF-8');
 }
 
 function importGarminCSV(event) {

@@ -88,14 +88,18 @@
 
 <script>
 const GIST_FILE = 'health_data.json';
-const SYNC_KEYS = ['conditions','runs','fastings','eyes','skins','sleeps','suppRecords','suppTypes','inbody','runnerGoal'];
+const SYNC_KEYS = [
+  'conditions','runs','fastings','eyes','skins','sleeps',
+  'suppRecords','suppTypes','inbody','runnerGoal',
+  'habits','skinPackTypes','skinEveningTypes','workTypes'
+];
 let gToken = localStorage.getItem('gist_token') || '';
 let gId    = localStorage.getItem('gist_id')    || '';
 let parsed = {};
 let step = 'INIT';
 let entry = {};
 let selectedSupps = new Set();
-let stepsQueue = []; // 아직 입력 안 된 항목들
+let stepsQueue = [];
 
 // ── Gist API ──
 async function gistPull() {
@@ -109,7 +113,10 @@ async function gistPull() {
     const raw = g.files[GIST_FILE]?.content;
     if (!raw) return false;
     const data = JSON.parse(raw);
-    SYNC_KEYS.forEach(k => { try { parsed[k] = JSON.parse(data[k]) || []; } catch { parsed[k] = []; } });
+    SYNC_KEYS.forEach(k => {
+      try { parsed[k] = JSON.parse(data[k]); if (parsed[k] == null) parsed[k] = []; }
+      catch { parsed[k] = []; }
+    });
     return true;
   } catch { return false; }
 }
@@ -125,6 +132,25 @@ async function gistPush() {
     });
     return r.ok;
   } catch { return false; }
+}
+
+// ── 동적 옵션 읽기 헬퍼 ──
+function getSuppList() {
+  const st = parsed.suppTypes;
+  if (st && st.list && st.list.length) return st.list;
+  if (Array.isArray(st) && st.length) return st;
+  return ['크레아틴','오메가3','오메가3(x3)','유산균','비타민C'];
+}
+function getPackList() {
+  const pt = parsed.skinPackTypes;
+  if (pt && pt.list && pt.list.length) return pt.list;
+  if (Array.isArray(pt) && pt.length) return pt;
+  return ['파티온팩','Azelaic Acid팩','기타'];
+}
+function getWorkTypeList() {
+  const wt = parsed.workTypes;
+  if (wt && wt.list && wt.list.length) return wt.list;
+  return ['데이','나이트','오피스','오프'];
 }
 
 // ── UI ──
@@ -191,9 +217,16 @@ function sendMsg() {
 // ── 데이터 ──
 function today() { return new Date().toISOString().split('T')[0]; }
 function newEntry(d) {
-  return { date: d || today(), score: null, mBig: false, mSmall: false, alcohol: false,
-           ran: false, runDist: null, runTime: '', runHr: '',
-           fasted: false, eyePain: false, eyeDrop: false, supps: [], mask: false, maskType: '' };
+  return {
+    date: d || today(),
+    score: null, workType: null,
+    mBig: false, mSmall: false, alcohol: false,
+    ran: false, runDist: null, runTime: '', runHr: '',
+    fasted: false,
+    eyePain: false, eyeDrop: false,
+    supps: [],
+    mask: false, maskType: ''
+  };
 }
 
 // ── 날짜 선택 후 기존 데이터 확인 ──
@@ -210,8 +243,11 @@ function checkExisting(d) {
 
   if (cond) {
     const mms = [cond.mBig?'M':'', cond.mSmall?'m':'', cond.alcohol?'술':''].filter(Boolean).join('+') || '없음';
-    filled.push(`💪 컨디션: ${cond.score}점  M/m/술: ${mms}`);
-    entry.score = cond.score; entry.mBig = cond.mBig; entry.mSmall = cond.mSmall; entry.alcohol = cond.alcohol;
+    const wt = cond.workType ? `  근무: ${cond.workType}` : '';
+    filled.push(`💪 컨디션: ${cond.score ?? '-'}점  M/m/술: ${mms}${wt}`);
+    entry.score = cond.score ?? null;
+    entry.workType = cond.workType || null;
+    entry.mBig = cond.mBig; entry.mSmall = cond.mSmall; entry.alcohol = cond.alcohol;
   } else { missing.push('CONDITION'); }
 
   if (run) {
@@ -235,18 +271,17 @@ function checkExisting(d) {
   } else { missing.push('SUPP'); }
 
   if (skin) {
-    filled.push(`🧴 마스크팩: ${skin.mask ? skin.status : 'X'}`);
+    filled.push(`🧴 마스크팩: ${skin.mask ? (skin.status || 'O') : 'X'}`);
     entry.mask = skin.mask; entry.maskType = skin.status || '';
   } else { missing.push('SKIN'); }
 
-  // 기존 항목 표시
   if (filled.length > 0) {
     info(`✅ ${d} 기입력 항목\n${filled.join('\n')}`);
   }
 
   if (missing.length === 0) {
     bot('모든 항목이 이미 입력되어 있어! 수정할 항목 있어?');
-    setQR(['컨디션','러닝','단식','눈 통증','영양제','마스크팩','없음 (완료)']);
+    setQR(['컨디션','근무형태','러닝','단식','눈 통증','영양제','마스크팩','없음 (완료)']);
     step = 'EDIT_PICK';
   } else {
     if (filled.length > 0) bot(`나머지 ${missing.length}개 항목 입력할게!`);
@@ -290,23 +325,47 @@ async function go(val) {
       break;
 
     case 'DATE':
-      if (val === '오늘') entry.date = today();
-      else if (/^\d{4}-\d{2}-\d{2}$/.test(val)) entry.date = val;
-      else { bot('형식이 맞지 않아 (예: 2026-07-28)'); return; }
+      if (val === '직접 입력') {
+        bot('날짜를 입력해줘 (예: 2026-07-28)');
+        step = 'DATE_MANUAL'; return;
+      }
+      if (/^\d{4}-\d{2}-\d{2}$/.test(val)) { entry.date = val; }
+      else {
+        // 버튼 레이블 "오늘(7/29)" 등에서 날짜 추출
+        const m = val.match(/(\d{4}-\d{2}-\d{2})/);
+        if (m) entry.date = m[1];
+        else { bot('형식이 맞지 않아 (예: 2026-07-28)'); return; }
+      }
       checkExisting(entry.date);
+      break;
+
+    case 'DATE_MANUAL':
+      if (/^\d{4}-\d{2}-\d{2}$/.test(val)) { entry.date = val; checkExisting(entry.date); }
+      else { bot('형식이 맞지 않아 (예: 2026-07-28)'); }
       break;
 
     case 'EDIT_PICK':
       if (val === '없음 (완료)') { showConfirm(); break; }
-      const editMap = { '컨디션':'CONDITION', '러닝':'RUN', '단식':'FAST', '눈 통증':'EYE', '영양제':'SUPP', '마스크팩':'SKIN' };
+      const editMap = {
+        '컨디션':'CONDITION', '근무형태':'WORKTYPE',
+        '러닝':'RUN', '단식':'FAST',
+        '눈 통증':'EYE', '영양제':'SUPP', '마스크팩':'SKIN'
+      };
+      if (val === '근무형태') { askWorkType(); break; }
       if (editMap[val]) { stepsQueue = [editMap[val]]; nextStep(); }
       break;
 
     case 'CONDITION':
+      if (val === '__SKIP__') { entry.score = null; askWorkType(); break; }
       const sc = parseInt(val);
-      if (sc >= 1 && sc <= 5) { entry.score = sc; askMMS(); }
+      if (sc >= 1 && sc <= 5) { entry.score = sc; askWorkType(); }
       else bot('1~5 숫자를 선택해줘 😊');
       break;
+
+    case 'WORKTYPE':
+      if (val === '__SKIP__') { entry.workType = null; }
+      else { entry.workType = val; }
+      askMMS(); break;
 
     case 'MMS':
       entry.mBig    = val.includes('M') && !val.startsWith('m');
@@ -367,14 +426,43 @@ async function go(val) {
 
 // ── Step 함수들 ──
 function askDate() {
-  bot(`오늘이 ${today()} 맞아?`);
-  setQR(['오늘', '다른 날짜 직접 입력']);
+  bot('날짜 선택해줘');
+  const now = new Date();
+  const dayNames = ['일','월','화','수','목','금','토'];
+  const opts = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(now); d.setDate(now.getDate() - i);
+    const ds = d.toISOString().split('T')[0];
+    const mm = d.getMonth() + 1, dd = d.getDate(), dow = dayNames[d.getDay()];
+    const label = i === 0 ? `오늘(${mm}/${dd})` : i === 1 ? `어제(${mm}/${dd})` : `${mm}/${dd}(${dow})`;
+    opts.push(label + '|' + ds); // 뒤에 실제 날짜 숨김
+  }
+  // 버튼 직접 생성 (레이블과 값 분리)
+  const wrap = document.getElementById('qrWrap');
+  wrap.innerHTML = '';
+  opts.forEach(o => {
+    const [label, ds] = o.split('|');
+    const b = document.createElement('button');
+    b.className = 'qr'; b.textContent = label;
+    b.onclick = () => { user(label); setQR([]); entry.date = ds; checkExisting(ds); };
+    wrap.appendChild(b);
+  });
+  const manBtn = document.createElement('button');
+  manBtn.className = 'qr skip-btn'; manBtn.textContent = '직접 입력';
+  manBtn.onclick = () => { user('직접 입력'); setQR([]); go('직접 입력'); };
+  wrap.appendChild(manBtn);
   step = 'DATE';
 }
 function askCondition() {
   bot(`컨디션 점수는? (1~5점)`);
-  setQR(['1','2','3','4','5']);
+  setQR(['1','2','3','4','5'], false, true);
   step = 'CONDITION';
+}
+function askWorkType() {
+  const types = getWorkTypeList();
+  bot('오늘 근무형태는?');
+  setQR(types, false, true);
+  step = 'WORKTYPE';
 }
 function askMMS() {
   bot('M / m / 술 체크해줘');
@@ -398,12 +486,11 @@ function askEye() {
 }
 function askSupp() {
   selectedSupps = new Set();
-  // 기존 영양제가 있으면 미리 선택 표시
   if (entry.supps && entry.supps.length) {
     entry.supps.forEach(s => selectedSupps.add(s));
   }
   bot('영양제 선택해줘 (복수 선택 후 완료)');
-  const opts = ['크레아틴','오메가3','오메가3(x3)','유산균','비타민C'];
+  const opts = getSuppList();
   const wrap = document.getElementById('qrWrap');
   wrap.innerHTML = '';
   opts.forEach(o => {
@@ -428,16 +515,18 @@ function askSupp() {
 }
 function askSkin() {
   bot('마스크팩 했어?');
-  setQR(['안 함','파티온팩','Azelaic Acid팩','기타'], false, true);
+  const packs = getPackList();
+  setQR(['안 함', ...packs], false, true);
   step = 'SKIN';
 }
 
 function showConfirm() {
   const mms = [entry.mBig?'M':'', entry.mSmall?'m':'', entry.alcohol?'술':''].filter(Boolean).join('+') || '없음';
   const run = entry.ran ? `${entry.runDist}km ${entry.runTime}${entry.runHr?' HR'+entry.runHr:''}` : 'X';
+  const wt = entry.workType || '미입력';
   bot([
     `📅 ${entry.date}`,
-    `💪 컨디션: ${entry.score ?? '-'}점  M/m/술: ${mms}`,
+    `💪 컨디션: ${entry.score ?? '-'}점  근무: ${wt}  M/m/술: ${mms}`,
     `🏃 러닝: ${run}`,
     `🌙 단식: ${entry.fasted ? 'O' : 'X'}`,
     `👁 눈 통증: ${entry.eyePain ? (entry.eyeDrop?'O(안약O)':'O(안약X)') : 'X'}`,
@@ -453,10 +542,15 @@ async function saveEntry() {
   bot('저장 중...'); setQR([]);
   const d = entry.date, ts = Date.now();
 
-  // conditions
+  // conditions (workType 포함)
   const conds = parsed.conditions || [];
   const ci = conds.findIndex(c => c.date === d);
-  const cr = { id: ci>=0?conds[ci].id:ts, date:d, score:entry.score, mBig:entry.mBig, mSmall:entry.mSmall, alcohol:entry.alcohol, tags:[], memo:'' };
+  const cr = {
+    id: ci>=0?conds[ci].id:ts, date:d,
+    score: entry.score, workType: entry.workType,
+    mBig: entry.mBig, mSmall: entry.mSmall, alcohol: entry.alcohol,
+    tags: [], memo: ''
+  };
   if (ci>=0) conds[ci]={...conds[ci],...cr}; else conds.push(cr);
   parsed.conditions = conds;
 
@@ -473,7 +567,7 @@ async function saveEntry() {
   const fasts = parsed.fastings || [];
   const fi = fasts.findIndex(f => f.date === d);
   const fr = { id:fi>=0?fasts[fi].id:ts+2, date:d, fasted:entry.fasted };
-  if (fi>=0) fasts[fi]={...fasts[fi],...fr}; else if(entry.fasted) fasts.push(fr);
+  if (fi>=0) fasts[fi]={...fasts[fi],...fr}; else if (entry.fasted) fasts.push(fr);
   parsed.fastings = fasts;
 
   // eyes
@@ -498,7 +592,7 @@ async function saveEntry() {
   if (entry.mask) {
     const skins = parsed.skins || [];
     const ski = skins.findIndex(s => s.date === d);
-    const skr = { id:ski>=0?skins[ski].id:ts+5, date:d, mask:true, status:entry.maskType, memo:'' };
+    const skr = { id:ski>=0?skins[ski].id:ts+5, date:d, mask:true, status:entry.maskType, packTypes:[entry.maskType], eveningCare:[], memo:'' };
     if (ski>=0) skins[ski]={...skins[ski],...skr}; else skins.push(skr);
     parsed.skins = skins;
   }

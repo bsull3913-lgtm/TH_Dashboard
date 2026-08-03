@@ -2509,6 +2509,30 @@ function renderInbody() {
 // ═══════════════════════════════════
 // SKIN
 // ═══════════════════════════════════
+const SKIN_SEED_ENTRIES = [
+  { date: '2026-07-13', status: '', packTypes: [] },
+  { date: '2026-07-14', status: '', packTypes: [] },
+  { date: '2026-07-15', status: '', packTypes: [] },
+  { date: '2026-07-16', status: '', packTypes: [] },
+  { date: '2026-07-17', status: '', packTypes: [] },
+  { date: '2026-07-18', status: '', packTypes: [] },
+  { date: '2026-07-20', status: '파티온팩',        packTypes: ['파티온팩'] },
+  { date: '2026-07-21', status: 'Azelaic Acid팩', packTypes: ['Azelaic Acid팩'] },
+  { date: '2026-07-22', status: '파티온팩',        packTypes: ['파티온팩'] },
+];
+
+function applySkinSeed() {
+  const skins = DB.get('skins');
+  let changed = false;
+  SKIN_SEED_ENTRIES.forEach((e, i) => {
+    if (!skins.find(s => s.date === e.date)) {
+      skins.push({ id: 1000 + i, date: e.date, mask: true, status: e.status, packTypes: e.packTypes, eveningCare: [], memo: '' });
+      changed = true;
+    }
+  });
+  if (changed) DB.set('skins', skins);
+}
+
 let skinCalState = { year: new Date().getFullYear(), month: new Date().getMonth() };
 let selectedSkinDate = null;
 let maskOn = false;
@@ -2680,6 +2704,17 @@ function renderSkin() {
   document.getElementById('skinDate').value = selectedSkinDate || today();
   renderSkinPackSelector();
   renderSkinEveningSelector();
+  // 현재 달에 데이터 없으면 가장 최근 데이터 달로 자동 이동
+  {
+    const allSkins = DB.get('skins');
+    const curYM = `${skinCalState.year}-${String(skinCalState.month+1).padStart(2,'0')}`;
+    const hasThisMonth = allSkins.some(s => s.date.startsWith(curYM));
+    if (!hasThisMonth && allSkins.length > 0) {
+      const latest = allSkins.map(s => s.date).sort().reverse()[0];
+      const [ly, lm] = latest.split('-');
+      skinCalState.year = parseInt(ly); skinCalState.month = parseInt(lm) - 1;
+    }
+  }
   renderSkinCal();
   const data = DB.get('skins').sort((a,b) => b.date.localeCompare(a.date));
   const tbody = document.getElementById('skinTable');
@@ -4316,29 +4351,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ── SEED DATA ──
   const td = today();
 
-  // 피부케어 마스크팩 기준 데이터 — 없는 날짜만 삽입 (덮어쓰기 없음, 매 로드마다 안전 확인)
-  {
-    const skinSeed = DB.get('skins');
-    const skinEntries = [
-      { date: '2026-07-13', status: '', packTypes: [] },
-      { date: '2026-07-14', status: '', packTypes: [] },
-      { date: '2026-07-15', status: '', packTypes: [] },
-      { date: '2026-07-16', status: '', packTypes: [] },
-      { date: '2026-07-17', status: '', packTypes: [] },
-      { date: '2026-07-18', status: '', packTypes: [] },
-      { date: '2026-07-20', status: '파티온팩',        packTypes: ['파티온팩'] },
-      { date: '2026-07-21', status: 'Azelaic Acid팩', packTypes: ['Azelaic Acid팩'] },
-      { date: '2026-07-22', status: '파티온팩',        packTypes: ['파티온팩'] },
-    ];
-    let changed = false;
-    skinEntries.forEach((e, i) => {
-      if (!skinSeed.find(s => s.date === e.date)) {
-        skinSeed.push({ id: 1000 + i, date: e.date, mask: true, status: e.status, packTypes: e.packTypes, eveningCare: [], memo: '' });
-        changed = true;
-      }
-    });
-    if (changed) DB.set('skins', skinSeed);
-  }
+  // 피부케어 마스크팩 기준 데이터 — 없는 날짜만 삽입 (함수화하여 Gist pull 후에도 재실행)
+  applySkinSeed();
 
   // 영양제 시드 (최초 1회만)
   if (!localStorage.getItem('suppSeedLoaded')) {
@@ -4609,6 +4623,7 @@ const GistSync = {
       if (!raw) throw new Error('no file');
       const data = JSON.parse(raw);
       SYNC_KEYS.forEach(k => { if (data[k] != null) localStorage.setItem(k, data[k]); });
+      applySkinSeed(); // Gist pull 후 시드 데이터 복원 보장
       const now = new Date();
       const ts = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
       setSyncStatus('ok', `✓ ${ts} 불러옴`);

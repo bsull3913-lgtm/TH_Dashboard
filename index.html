@@ -4316,23 +4316,29 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ── SEED DATA ──
   const td = today();
 
-  // 피부케어 마스크팩 7/13~18 + 7/20~22
-  const skinSeed = DB.get('skins');
-  const skinEntries = [
-    { date: '2026-07-13', status: '' }, { date: '2026-07-14', status: '' },
-    { date: '2026-07-15', status: '' }, { date: '2026-07-16', status: '' },
-    { date: '2026-07-17', status: '' }, { date: '2026-07-18', status: '' },
-    { date: '2026-07-20', status: '파티온팩' },
-    { date: '2026-07-21', status: 'Azelaic Acid팩' },
-    { date: '2026-07-22', status: '파티온팩' },
-  ];
-  skinEntries.forEach((e, i) => {
-    const idx = skinSeed.findIndex(s => s.date === e.date);
-    const rec = { id: 1000 + i, date: e.date, mask: true, status: e.status, memo: '' };
-    if (idx >= 0) skinSeed[idx] = { ...skinSeed[idx], ...rec };
-    else skinSeed.push(rec);
-  });
-  DB.set('skins', skinSeed);
+  // 피부케어 마스크팩 기준 데이터 — 없는 날짜만 삽입 (덮어쓰기 없음, 매 로드마다 안전 확인)
+  {
+    const skinSeed = DB.get('skins');
+    const skinEntries = [
+      { date: '2026-07-13', status: '', packTypes: [] },
+      { date: '2026-07-14', status: '', packTypes: [] },
+      { date: '2026-07-15', status: '', packTypes: [] },
+      { date: '2026-07-16', status: '', packTypes: [] },
+      { date: '2026-07-17', status: '', packTypes: [] },
+      { date: '2026-07-18', status: '', packTypes: [] },
+      { date: '2026-07-20', status: '파티온팩',        packTypes: ['파티온팩'] },
+      { date: '2026-07-21', status: 'Azelaic Acid팩', packTypes: ['Azelaic Acid팩'] },
+      { date: '2026-07-22', status: '파티온팩',        packTypes: ['파티온팩'] },
+    ];
+    let changed = false;
+    skinEntries.forEach((e, i) => {
+      if (!skinSeed.find(s => s.date === e.date)) {
+        skinSeed.push({ id: 1000 + i, date: e.date, mask: true, status: e.status, packTypes: e.packTypes, eveningCare: [], memo: '' });
+        changed = true;
+      }
+    });
+    if (changed) DB.set('skins', skinSeed);
+  }
 
   // 영양제 시드 (최초 1회만)
   if (!localStorage.getItem('suppSeedLoaded')) {
@@ -4362,6 +4368,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     ['데이','나이트','오피스','오프'].forEach(t => { if (!wt.list.includes(t)) wt.list.push(t); });
     DB.setObj('workTypes', wt);
     localStorage.setItem('workTypeSeedLoaded', '1');
+  }
+
+  // 팩 종류 시드 (최초 1회만)
+  if (!localStorage.getItem('skinPackSeedLoaded')) {
+    const pt = DB.getObj('skinPackTypes', { list: [] });
+    ['파티온팩','Azelaic Acid팩','기타'].forEach(t => { if (!pt.list.includes(t)) pt.list.push(t); });
+    DB.setObj('skinPackTypes', pt);
+    localStorage.setItem('skinPackSeedLoaded', '1');
+  }
+
+  // 저녁화장품 시드 (최초 1회만)
+  if (!localStorage.getItem('skinEveningSeedLoaded')) {
+    const et = DB.getObj('skinEveningTypes', { list: [] });
+    ['레티놀','나이아신아마이드','세럼','수분크림','선크림','기타'].forEach(t => { if (!et.list.includes(t)) et.list.push(t); });
+    DB.setObj('skinEveningTypes', et);
+    localStorage.setItem('skinEveningSeedLoaded', '1');
   }
 
   // 눈 상태: 오늘 통증 + 안약

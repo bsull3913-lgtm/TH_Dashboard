@@ -1568,6 +1568,8 @@ function setHomePeriod(p) {
 
 function shiftHomeMonth(dir) {
   homeMonthOffset += dir;
+  // 미래달은 막기
+  if (homeMonthOffset > 0) homeMonthOffset = 0;
   updateHomeMonthLabel();
   renderHomePeriodChart();
 }
@@ -1578,10 +1580,12 @@ function updateHomeMonthLabel() {
   if (!btn) return;
   if (homeMonthOffset === 0) {
     btn.textContent = '이번달';
+    if (next) next.style.opacity = '0.3';
   } else {
     const now = new Date();
     const t = new Date(now.getFullYear(), now.getMonth() + homeMonthOffset, 1);
     btn.textContent = `${t.getMonth()+1}월`;
+    if (next) next.style.opacity = '1';
   }
 }
 
@@ -2533,7 +2537,22 @@ function applySkinSeed() {
   if (changed) DB.set('skins', skins);
 }
 
+function applySkinTypeSeed() {
+  // 리스트가 완전히 비어있을 때만 기본값 삽입 (Gist 덮어쓰기 대응)
+  const pt = DB.getObj('skinPackTypes', { list: [] });
+  if (pt.list.length === 0) {
+    ['파티온팩','Azelaic Acid팩','기타'].forEach(t => pt.list.push(t));
+    DB.setObj('skinPackTypes', pt);
+  }
+  const et = DB.getObj('skinEveningTypes', { list: [] });
+  if (et.list.length === 0) {
+    ['레티놀','나이아신아마이드','세럼','수분크림','선크림','기타'].forEach(t => et.list.push(t));
+    DB.setObj('skinEveningTypes', et);
+  }
+}
+
 let skinCalState = { year: new Date().getFullYear(), month: new Date().getMonth() };
+let skinCalManuallyStepped = false; // < > 버튼으로 직접 탐색했는지 여부
 let selectedSkinDate = null;
 let maskOn = false;
 let selectedSkinPacks = new Set();
@@ -2688,11 +2707,19 @@ function deleteSkin(id) {
   renderSkin();
 }
 
-function skinCalPrev() { skinCalState.month--; if (skinCalState.month < 0) { skinCalState.month = 11; skinCalState.year--; } renderSkinCal(); }
-function skinCalNext() { skinCalState.month++; if (skinCalState.month > 11) { skinCalState.month = 0; skinCalState.year++; } renderSkinCal(); }
+function skinCalPrev() { skinCalManuallyStepped = true; skinCalState.month--; if (skinCalState.month < 0) { skinCalState.month = 11; skinCalState.year--; } renderSkinCal(); }
+function skinCalNext() { skinCalManuallyStepped = true; skinCalState.month++; if (skinCalState.month > 11) { skinCalState.month = 0; skinCalState.year++; } renderSkinCal(); }
 
 function renderSkinCal() {
   const skins = DB.get('skins');
+  // 현재 달 데이터 없고 다른 달 데이터 있으면 최신 달로 자동 이동 (수동 탐색 후엔 유지)
+  if (!skinCalManuallyStepped && skins.length > 0) {
+    const curYM = `${skinCalState.year}-${String(skinCalState.month+1).padStart(2,'0')}`;
+    if (!skins.some(s => s.date && s.date.startsWith(curYM))) {
+      const latest = skins.map(s => s.date).filter(Boolean).sort().reverse()[0];
+      if (latest) { skinCalState.year = +latest.slice(0,4); skinCalState.month = +latest.slice(5,7)-1; }
+    }
+  }
   renderCal('skinCal', 'skinCalTitle', skinCalState.year, skinCalState.month, (d) => {
     const s = skins.find(x => x.date === d);
     if (!s) return '';
@@ -2704,17 +2731,6 @@ function renderSkin() {
   document.getElementById('skinDate').value = selectedSkinDate || today();
   renderSkinPackSelector();
   renderSkinEveningSelector();
-  // 현재 달에 데이터 없으면 가장 최근 데이터 달로 자동 이동
-  {
-    const allSkins = DB.get('skins');
-    const curYM = `${skinCalState.year}-${String(skinCalState.month+1).padStart(2,'0')}`;
-    const hasThisMonth = allSkins.some(s => s.date.startsWith(curYM));
-    if (!hasThisMonth && allSkins.length > 0) {
-      const latest = allSkins.map(s => s.date).sort().reverse()[0];
-      const [ly, lm] = latest.split('-');
-      skinCalState.year = parseInt(ly); skinCalState.month = parseInt(lm) - 1;
-    }
-  }
   renderSkinCal();
   const data = DB.get('skins').sort((a,b) => b.date.localeCompare(a.date));
   const tbody = document.getElementById('skinTable');
@@ -4266,10 +4282,14 @@ function restoreHomeOrder() {
 // ═══════════════════════════════════
 // INIT
 // ═══════════════════════════════════
-document.addEventListener('DOMContentLoaded', async () => {
-  // ── Gist pull 먼저 (시드보다 앞서 실행) ──
+document.addEventListener('DOMContentLoaded', () => {
+  // ── 피부 시드 먼저 (Gist pull 전에 기본 데이터 확보)
+  applySkinSeed();
+  applySkinTypeSeed();
+
+  // ── Gist pull을 백그라운드로 (await 없이) → seed/renderHome 즉시 실행
   if (GistSync.isConfigured()) {
-    await GistSync.pull();
+    GistSync.pull(); // fire-and-forget: 완료되면 내부에서 renderPage() 호출
   } else {
     setSyncStatus('', '미설정');
   }
@@ -4384,21 +4404,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     localStorage.setItem('workTypeSeedLoaded', '1');
   }
 
-  // 팩 종류 시드 (최초 1회만)
-  if (!localStorage.getItem('skinPackSeedLoaded')) {
-    const pt = DB.getObj('skinPackTypes', { list: [] });
-    ['파티온팩','Azelaic Acid팩','기타'].forEach(t => { if (!pt.list.includes(t)) pt.list.push(t); });
-    DB.setObj('skinPackTypes', pt);
-    localStorage.setItem('skinPackSeedLoaded', '1');
-  }
-
-  // 저녁화장품 시드 (최초 1회만)
-  if (!localStorage.getItem('skinEveningSeedLoaded')) {
-    const et = DB.getObj('skinEveningTypes', { list: [] });
-    ['레티놀','나이아신아마이드','세럼','수분크림','선크림','기타'].forEach(t => { if (!et.list.includes(t)) et.list.push(t); });
-    DB.setObj('skinEveningTypes', et);
-    localStorage.setItem('skinEveningSeedLoaded', '1');
-  }
+  // 팩/저녁화장품 시드 (빈 리스트일 때만 — Gist pull 덮어쓰기 대응)
+  applySkinTypeSeed();
 
   // 눈 상태: 오늘 통증 + 안약
   const eyeSeed = DB.get('eyes');
@@ -4571,7 +4578,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   restoreNavOrder();
   initDragSort();
   document.getElementById('sidebarDate').textContent = fmtDateLong(today());
-  renderHome();
+  navigate('home'); // renderHome() 직접 호출 대신 navigate()로 강제 reflow 후 렌더
 
   // ── localStorage 변경 감지 (타 탭 포함) → 분석 자동 갱신
   window.addEventListener('storage', e => {
@@ -4623,7 +4630,8 @@ const GistSync = {
       if (!raw) throw new Error('no file');
       const data = JSON.parse(raw);
       SYNC_KEYS.forEach(k => { if (data[k] != null) localStorage.setItem(k, data[k]); });
-      applySkinSeed(); // Gist pull 후 시드 데이터 복원 보장
+      applySkinSeed();     // Gist pull 후 피부 기록 시드 복원
+      applySkinTypeSeed(); // Gist pull 후 팩/저녁화장품 타입 복원
       const now = new Date();
       const ts = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
       setSyncStatus('ok', `✓ ${ts} 불러옴`);

@@ -3823,6 +3823,7 @@ function renderAnalysis() {
     sleep: d => sleepMap[d]?.score != null && sleepMap[d].score >= 75,
     M:     d => !!(condMap[d]?.mBig),
     m:     d => !!(condMap[d]?.mSmall),
+    night: d => condMap[d]?.workType === '나이트',
   };
 
   // Window wrappers
@@ -3850,7 +3851,7 @@ function renderAnalysis() {
     { key:'alc',  label:'🍺 음주',        col:'#f7a26a', desc:'알코올 섭취 여부' },
     { key:'sleep',label:'🛌 수면(≥75점)', col:'#5ed8a4', desc:'가민 수면점수 75+ 달성' },
     { key:'eye',  label:'👁 눈 통증',     col:'#f76a6a', desc:'안구 통증·불편 기록' },
-    { key:'mask', label:'🧴 마스크팩',    col:'#a78bfa', desc:'피부 마스크팩 사용' },
+{ key:'night',label:'🌃 나이트근무',  col:'#818cf8', desc:'근무형태 = 나이트' },
     { key:'M',    label:'M',             col:'#7c6af7',  desc:'' },
     { key:'m',    label:'m',             col:'#f7c26a',  desc:'' },
   ];

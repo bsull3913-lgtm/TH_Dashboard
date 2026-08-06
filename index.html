@@ -1400,7 +1400,14 @@
 // DATA STORE (localStorage)
 // ═══════════════════════════════════
 const DB = {
-  get(key) { try { return JSON.parse(localStorage.getItem(key)) || []; } catch { return []; } },
+  // null 엔트리 자동 필터링: Gist에서 불러온 배열에 null이 있으면 TypeError 방지
+  get(key) {
+    try {
+      const v = JSON.parse(localStorage.getItem(key));
+      const arr = Array.isArray(v) ? v : (v != null ? [] : []);
+      return arr.filter(x => x != null);
+    } catch { return []; }
+  },
   set(key, val) { localStorage.setItem(key, JSON.stringify(val)); },
   getObj(key, def={}) { try { return JSON.parse(localStorage.getItem(key)) || def; } catch { return def; } },
   setObj(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
@@ -1842,11 +1849,19 @@ function renderHomePeriodChart() {
     ${eventHtml}
   `;
 
-  // 차트 생성
+  // 강제 reflow → canvas 부모 크기 확보 후 캔버스에 명시적 크기 지정
+  void content.offsetHeight;
+  const _cW = content.clientWidth || 680;
+  const condCanvas = document.getElementById('hpCondChart');
+  const runCanvas  = document.getElementById('hpRunChart');
+  condCanvas.width  = _cW;  condCanvas.height  = 160;
+  runCanvas.width   = _cW;  runCanvas.height   = 90;
+
+  // 차트 생성 (responsive:false — ResizeObserver 타이밍 문제 우회)
   if (homeCharts.hpCond) { homeCharts.hpCond.destroy(); homeCharts.hpCond = null; }
   if (homeCharts.hpRun)  { homeCharts.hpRun.destroy();  homeCharts.hpRun  = null; }
 
-  homeCharts.hpCond = new Chart(document.getElementById('hpCondChart').getContext('2d'), {
+  homeCharts.hpCond = new Chart(condCanvas.getContext('2d'), {
     type: 'bar',
     data: {
       labels,
@@ -1867,7 +1882,7 @@ function renderHomePeriodChart() {
       ]
     },
     options: {
-      responsive: true, maintainAspectRatio: false,
+      responsive: false, maintainAspectRatio: false,
       plugins: { legend: { display: true, labels: { color:'#8888aa', font:{size:10}, boxWidth:12, padding:8 } } },
       scales: {
         x:  { grid:{color:'#2e2e40'}, ticks:{color:'#8888aa',font:{size:10},autoSkip:true,maxTicksLimit:labels.length>40?13:labels.length>14?16:labels.length} },
@@ -1877,14 +1892,14 @@ function renderHomePeriodChart() {
     }
   });
 
-  homeCharts.hpRun = new Chart(document.getElementById('hpRunChart').getContext('2d'), {
+  homeCharts.hpRun = new Chart(runCanvas.getContext('2d'), {
     type: 'bar',
     data: {
       labels,
       datasets: [{ label:'km', data:runData, backgroundColor:'rgba(124,106,247,0.7)', borderRadius:4 }]
     },
     options: {
-      responsive: true, maintainAspectRatio: false,
+      responsive: false, maintainAspectRatio: false,
       plugins: { legend:{display:false} },
       scales: {
         x: { grid:{color:'#2e2e40'}, ticks:{color:'#8888aa',font:{size:10},autoSkip:true,maxTicksLimit:labels.length>40?13:labels.length>14?16:labels.length} },
@@ -2538,13 +2553,15 @@ function applySkinSeed() {
 }
 
 function applySkinTypeSeed() {
-  // 리스트가 완전히 비어있을 때만 기본값 삽입 (Gist 덮어쓰기 대응)
-  const pt = DB.getObj('skinPackTypes', { list: [] });
+  // list 필드가 Array가 아닐 수 있음 (구 Gist 데이터: {}, [], null 등) → 방어 처리
+  let pt = DB.getObj('skinPackTypes', { list: [] });
+  if (!pt || !Array.isArray(pt.list)) { pt = { list: [] }; }
   if (pt.list.length === 0) {
     ['파티온팩','Azelaic Acid팩','기타'].forEach(t => pt.list.push(t));
     DB.setObj('skinPackTypes', pt);
   }
-  const et = DB.getObj('skinEveningTypes', { list: [] });
+  let et = DB.getObj('skinEveningTypes', { list: [] });
+  if (!et || !Array.isArray(et.list)) { et = { list: [] }; }
   if (et.list.length === 0) {
     ['레티놀','나이아신아마이드','세럼','수분크림','선크림','기타'].forEach(t => et.list.push(t));
     DB.setObj('skinEveningTypes', et);
@@ -2561,14 +2578,16 @@ let selectedSkinEvening = new Set();
 function addSkinPackType() {
   const val = document.getElementById('newSkinPack').value.trim();
   if (!val) return;
-  const types = DB.getObj('skinPackTypes', { list: [] });
+  let types = DB.getObj('skinPackTypes', { list: [] });
+  if (!types || !Array.isArray(types.list)) types = { list: [] };
   if (!types.list.includes(val)) { types.list.push(val); DB.setObj('skinPackTypes', types); }
   document.getElementById('newSkinPack').value = '';
   renderSkinPackSelector();
 }
 
 function deleteSkinPackType(name) {
-  const types = DB.getObj('skinPackTypes', { list: [] });
+  let types = DB.getObj('skinPackTypes', { list: [] });
+  if (!types || !Array.isArray(types.list)) types = { list: [] };
   types.list = types.list.filter(t => t !== name);
   DB.setObj('skinPackTypes', types);
   selectedSkinPacks.delete(name);
@@ -2576,7 +2595,8 @@ function deleteSkinPackType(name) {
 }
 
 function renderSkinPackSelector() {
-  const types = DB.getObj('skinPackTypes', { list: [] });
+  let types = DB.getObj('skinPackTypes', { list: [] });
+  if (!types || !Array.isArray(types.list)) types = { list: [] };
   const el = document.getElementById('skinPackSelector');
   if (!el) return;
   el.innerHTML = types.list.map(t => `
@@ -2595,14 +2615,16 @@ function toggleSkinPack(name) {
 function addSkinEveningType() {
   const val = document.getElementById('newSkinEvening').value.trim();
   if (!val) return;
-  const types = DB.getObj('skinEveningTypes', { list: [] });
+  let types = DB.getObj('skinEveningTypes', { list: [] });
+  if (!types || !Array.isArray(types.list)) types = { list: [] };
   if (!types.list.includes(val)) { types.list.push(val); DB.setObj('skinEveningTypes', types); }
   document.getElementById('newSkinEvening').value = '';
   renderSkinEveningSelector();
 }
 
 function deleteSkinEveningType(name) {
-  const types = DB.getObj('skinEveningTypes', { list: [] });
+  let types = DB.getObj('skinEveningTypes', { list: [] });
+  if (!types || !Array.isArray(types.list)) types = { list: [] };
   types.list = types.list.filter(t => t !== name);
   DB.setObj('skinEveningTypes', types);
   selectedSkinEvening.delete(name);
@@ -2610,7 +2632,8 @@ function deleteSkinEveningType(name) {
 }
 
 function renderSkinEveningSelector() {
-  const types = DB.getObj('skinEveningTypes', { list: [] });
+  let types = DB.getObj('skinEveningTypes', { list: [] });
+  if (!types || !Array.isArray(types.list)) types = { list: [] };
   const el = document.getElementById('skinEveningSelector');
   if (!el) return;
   el.innerHTML = types.list.map(t => `
@@ -2711,12 +2734,12 @@ function skinCalPrev() { skinCalManuallyStepped = true; skinCalState.month--; if
 function skinCalNext() { skinCalManuallyStepped = true; skinCalState.month++; if (skinCalState.month > 11) { skinCalState.month = 0; skinCalState.year++; } renderSkinCal(); }
 
 function renderSkinCal() {
-  const skins = DB.get('skins');
+  const skins = DB.get('skins'); // DB.get이 이미 null 엔트리 필터링
   // 현재 달 데이터 없고 다른 달 데이터 있으면 최신 달로 자동 이동 (수동 탐색 후엔 유지)
   if (!skinCalManuallyStepped && skins.length > 0) {
     const curYM = `${skinCalState.year}-${String(skinCalState.month+1).padStart(2,'0')}`;
-    if (!skins.some(s => s.date && s.date.startsWith(curYM))) {
-      const latest = skins.map(s => s.date).filter(Boolean).sort().reverse()[0];
+    if (!skins.some(s => s && s.date && s.date.startsWith(curYM))) {
+      const latest = skins.map(s => s && s.date).filter(Boolean).sort().reverse()[0];
       if (latest) { skinCalState.year = +latest.slice(0,4); skinCalState.month = +latest.slice(5,7)-1; }
     }
   }
@@ -4283,6 +4306,7 @@ function restoreHomeOrder() {
 // INIT
 // ═══════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
+try { // ── 전체 init 오류 방어 ──
   // ── 피부 시드 먼저 (Gist pull 전에 기본 데이터 확보)
   applySkinSeed();
   applySkinTypeSeed();
@@ -4578,13 +4602,25 @@ document.addEventListener('DOMContentLoaded', () => {
   restoreNavOrder();
   initDragSort();
   document.getElementById('sidebarDate').textContent = fmtDateLong(today());
-  navigate('home'); // renderHome() 직접 호출 대신 navigate()로 강제 reflow 후 렌더
+  navigate('home');
 
   // ── localStorage 변경 감지 (타 탭 포함) → 분석 자동 갱신
   window.addEventListener('storage', e => {
     const watchKeys = ['conditions','runs','fastings','eyes','skins','sleeps'];
     if (watchKeys.includes(e.key)) notifyDataChanged();
   });
+} catch(initErr) {
+  // init 실패 시 홈 렌더 재시도 (안전망)
+  console.error('[INIT ERROR]', initErr);
+  try { navigate('home'); } catch(e2) { console.error('[HOME FALLBACK ERROR]', e2); }
+}
+});
+
+// ── window.load: DOMContentLoaded 이후 첫 페인트 완료 보장 후 재렌더 (홈 차트 크기 확보)
+window.addEventListener('load', () => {
+  if (currentPage === 'home') {
+    try { renderHome(); } catch(e) { console.error('[LOAD RENDERME ERROR]', e); }
+  }
 });
 
 // ═══════════════════════════════════
@@ -4630,12 +4666,14 @@ const GistSync = {
       if (!raw) throw new Error('no file');
       const data = JSON.parse(raw);
       SYNC_KEYS.forEach(k => { if (data[k] != null) localStorage.setItem(k, data[k]); });
-      applySkinSeed();     // Gist pull 후 피부 기록 시드 복원
-      applySkinTypeSeed(); // Gist pull 후 팩/저녁화장품 타입 복원
+      // 시드 복원 — 실패해도 re-render는 반드시 실행
+      try { applySkinSeed(); } catch(e) { console.error('[applySkinSeed]', e); }
+      try { applySkinTypeSeed(); } catch(e) { console.error('[applySkinTypeSeed]', e); }
       const now = new Date();
       const ts = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
       setSyncStatus('ok', `✓ ${ts} 불러옴`);
-      renderPage(currentPage);
+      // setTimeout 0: 브라우저 layout 완료 후 chart canvas 크기 확보
+      setTimeout(() => { try { renderPage(currentPage); } catch(e) { console.error('[renderPage after pull]', e); } }, 0);
     } catch(e) {
       setSyncStatus('error','불러오기 실패 — 토큰/ID 확인');
     }

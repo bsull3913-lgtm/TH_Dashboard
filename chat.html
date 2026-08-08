@@ -99,6 +99,7 @@ let parsed = {};
 let step = 'INIT';
 let entry = {};
 let selectedSupps = new Set();
+let selectedEveningCare = new Set();
 let stepsQueue = [];
 
 // ── Gist API ──
@@ -146,6 +147,12 @@ function getPackList() {
   if (pt && pt.list && pt.list.length) return pt.list;
   if (Array.isArray(pt) && pt.length) return pt;
   return ['파티온팩','Azelaic Acid팩','기타'];
+}
+function getEveningList() {
+  const et = parsed.skinEveningTypes;
+  if (et && et.list && et.list.length) return et.list;
+  if (Array.isArray(et) && et.length) return et;
+  return ['레티놀','나이아신아마이드','세럼','수분크림','선크림','기타'];
 }
 function getWorkTypeList() {
   const wt = parsed.workTypes;
@@ -215,17 +222,16 @@ function sendMsg() {
 }
 
 // ── 데이터 ──
-function today() { return new Date().toISOString().split('T')[0]; }
+function today() { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function newEntry(d) {
   return {
     date: d || today(),
     score: null, workType: null,
     mBig: false, mSmall: false, alcohol: false,
-    ran: false, runDist: null, runTime: '', runHr: '',
     fasted: false,
     eyePain: false, eyeDrop: false,
     supps: [],
-    mask: false, maskType: ''
+    mask: false, maskType: '', eveningCare: []
   };
 }
 
@@ -250,11 +256,6 @@ function checkExisting(d) {
     entry.mBig = cond.mBig; entry.mSmall = cond.mSmall; entry.alcohol = cond.alcohol;
   } else { missing.push('CONDITION'); }
 
-  if (run) {
-    filled.push(`🏃 러닝: ${run.dist}km ${run.time || ''}${run.hr ? ' HR'+run.hr : ''}`);
-    entry.ran = true; entry.runDist = run.dist; entry.runTime = run.time || ''; entry.runHr = run.hr || '';
-  } else { missing.push('RUN'); }
-
   if (fast) {
     filled.push(`🌙 단식: ${fast.fasted ? 'O' : 'X'}`);
     entry.fasted = fast.fasted;
@@ -271,8 +272,10 @@ function checkExisting(d) {
   } else { missing.push('SUPP'); }
 
   if (skin) {
-    filled.push(`🧴 마스크팩: ${skin.mask ? (skin.status || 'O') : 'X'}`);
+    const ec = (skin.eveningCare || []).join(', ') || '없음';
+    filled.push(`🧴 팩: ${skin.mask ? (skin.status || 'O') : 'X'} / 저녁: ${ec}`);
     entry.mask = skin.mask; entry.maskType = skin.status || '';
+    entry.eveningCare = skin.eveningCare || [];
   } else { missing.push('SKIN'); }
 
   if (filled.length > 0) {
@@ -281,7 +284,7 @@ function checkExisting(d) {
 
   if (missing.length === 0) {
     bot('모든 항목이 이미 입력되어 있어! 수정할 항목 있어?');
-    setQR(['컨디션','근무형태','러닝','단식','눈 통증','영양제','마스크팩','없음 (완료)']);
+    setQR(['컨디션','근무형태','단식','눈 통증','영양제','피부케어','없음 (완료)']);
     step = 'EDIT_PICK';
   } else {
     if (filled.length > 0) bot(`나머지 ${missing.length}개 항목 입력할게!`);
@@ -295,7 +298,6 @@ function nextStep() {
   if (stepsQueue.length === 0) { showConfirm(); return; }
   const s = stepsQueue.shift();
   if (s === 'CONDITION') askCondition();
-  else if (s === 'RUN')  askRun();
   else if (s === 'FAST') askFast();
   else if (s === 'EYE')  askEye();
   else if (s === 'SUPP') askSupp();
@@ -348,8 +350,8 @@ async function go(val) {
       if (val === '없음 (완료)') { showConfirm(); break; }
       const editMap = {
         '컨디션':'CONDITION', '근무형태':'WORKTYPE',
-        '러닝':'RUN', '단식':'FAST',
-        '눈 통증':'EYE', '영양제':'SUPP', '마스크팩':'SKIN'
+        '단식':'FAST',
+        '눈 통증':'EYE', '영양제':'SUPP', '피부케어':'SKIN'
       };
       if (val === '근무형태') { askWorkType(); break; }
       if (editMap[val]) { stepsQueue = [editMap[val]]; nextStep(); }
@@ -372,20 +374,6 @@ async function go(val) {
       entry.mSmall  = val.startsWith('m') || val.includes('+m');
       entry.alcohol = val.includes('술');
       nextStep(); break;
-
-    case 'RUN':
-      entry.ran = (val === '했음');
-      if (entry.ran) { bot('거리 시간 심박 입력해줘\n(예: 6.4 47:08 161)'); step = 'RUN_DETAIL'; }
-      else { entry.runDist = null; nextStep(); }
-      break;
-
-    case 'RUN_DETAIL': {
-      const p = val.split(/\s+/);
-      entry.runDist = parseFloat(p[0]) || null;
-      entry.runTime = p[1] || '';
-      entry.runHr   = p[2] || '';
-      nextStep(); break;
-    }
 
     case 'FAST':
       if (val === '__SKIP__') { nextStep(); break; }
@@ -411,7 +399,16 @@ async function go(val) {
       if (val === '__SKIP__') { nextStep(); break; }
       entry.mask     = (val !== '안 함');
       entry.maskType = entry.mask ? val : '';
-      nextStep(); break;
+      askSkinEvening(); break;
+
+    case 'SKIN_EVENING':
+      if (val === '__SKIP__') { nextStep(); break; }
+      if (val === '__DONE__') {
+        entry.eveningCare = [...selectedEveningCare];
+        user(entry.eveningCare.length ? entry.eveningCare.join(', ') : '없음');
+        setQR([]);
+        nextStep();
+      } break;
 
     case 'CONFIRM':
       if (val === '저장') await saveEntry();
@@ -432,7 +429,7 @@ function askDate() {
   const opts = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(now); d.setDate(now.getDate() - i);
-    const ds = d.toISOString().split('T')[0];
+    const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     const mm = d.getMonth() + 1, dd = d.getDate(), dow = dayNames[d.getDay()];
     const label = i === 0 ? `오늘(${mm}/${dd})` : i === 1 ? `어제(${mm}/${dd})` : `${mm}/${dd}(${dow})`;
     opts.push(label + '|' + ds); // 뒤에 실제 날짜 숨김
@@ -468,11 +465,6 @@ function askMMS() {
   bot('M / m / 술 체크해줘');
   setQR(['없음','M','m','술','M+술','m+술']);
   step = 'MMS';
-}
-function askRun() {
-  bot('러닝했어?');
-  setQR(['했음','안 했음'], false, true);
-  step = 'RUN';
 }
 function askFast() {
   bot('저녁 단식했어?');
@@ -519,19 +511,47 @@ function askSkin() {
   setQR(['안 함', ...packs], false, true);
   step = 'SKIN';
 }
+function askSkinEvening() {
+  selectedEveningCare = new Set();
+  if (entry.eveningCare && entry.eveningCare.length) {
+    entry.eveningCare.forEach(s => selectedEveningCare.add(s));
+  }
+  bot('저녁 화장품 선택해줘 (복수 선택 후 완료)');
+  const opts = getEveningList();
+  const wrap = document.getElementById('qrWrap');
+  wrap.innerHTML = '';
+  opts.forEach(o => {
+    const b = document.createElement('button');
+    b.className = 'qr' + (selectedEveningCare.has(o) ? ' on' : '');
+    b.textContent = o;
+    b.onclick = () => {
+      if (selectedEveningCare.has(o)) { selectedEveningCare.delete(o); b.classList.remove('on'); }
+      else { selectedEveningCare.add(o); b.classList.add('on'); }
+    };
+    wrap.appendChild(b);
+  });
+  const done = document.createElement('button');
+  done.className = 'qr done-btn'; done.textContent = '✓ 완료';
+  done.onclick = () => go('__DONE__');
+  wrap.appendChild(done);
+  const skip = document.createElement('button');
+  skip.className = 'qr skip-btn'; skip.textContent = '건너뛰기';
+  skip.onclick = () => { user('건너뛰기'); setQR([]); go('__SKIP__'); };
+  wrap.appendChild(skip);
+  step = 'SKIN_EVENING';
+}
 
 function showConfirm() {
   const mms = [entry.mBig?'M':'', entry.mSmall?'m':'', entry.alcohol?'술':''].filter(Boolean).join('+') || '없음';
-  const run = entry.ran ? `${entry.runDist}km ${entry.runTime}${entry.runHr?' HR'+entry.runHr:''}` : 'X';
   const wt = entry.workType || '미입력';
+  const ec = entry.eveningCare && entry.eveningCare.length ? entry.eveningCare.join(', ') : '없음';
   bot([
     `📅 ${entry.date}`,
     `💪 컨디션: ${entry.score ?? '-'}점  근무: ${wt}  M/m/술: ${mms}`,
-    `🏃 러닝: ${run}`,
     `🌙 단식: ${entry.fasted ? 'O' : 'X'}`,
     `👁 눈 통증: ${entry.eyePain ? (entry.eyeDrop?'O(안약O)':'O(안약X)') : 'X'}`,
     `💊 영양제: ${entry.supps.length ? entry.supps.join(', ') : '없음'}`,
-    `🧴 마스크팩: ${entry.mask ? entry.maskType : 'X'}`,
+    `🧴 팩: ${entry.mask ? entry.maskType : 'X'} / 저녁: ${ec}`,
   ].join('\n'));
   bot('저장할까?');
   setQR(['저장','취소']);
@@ -553,15 +573,6 @@ async function saveEntry() {
   };
   if (ci>=0) conds[ci]={...conds[ci],...cr}; else conds.push(cr);
   parsed.conditions = conds;
-
-  // runs
-  if (entry.ran && entry.runDist) {
-    const runs = parsed.runs || [];
-    const ri = runs.findIndex(r => r.date === d);
-    const rr = { id:ri>=0?runs[ri].id:ts+1, date:d, dist:entry.runDist, time:entry.runTime, hr:entry.runHr, memo:'chat', runType:'' };
-    if (ri>=0) runs[ri]={...runs[ri],...rr}; else runs.push(rr);
-    parsed.runs = runs;
-  }
 
   // fastings
   const fasts = parsed.fastings || [];
@@ -589,10 +600,10 @@ async function saveEntry() {
   }
 
   // skins
-  if (entry.mask) {
+  if (entry.mask || (entry.eveningCare && entry.eveningCare.length)) {
     const skins = parsed.skins || [];
     const ski = skins.findIndex(s => s.date === d);
-    const skr = { id:ski>=0?skins[ski].id:ts+5, date:d, mask:true, status:entry.maskType, packTypes:[entry.maskType], eveningCare:[], memo:'' };
+    const skr = { id:ski>=0?skins[ski].id:ts+5, date:d, mask:entry.mask, status:entry.maskType, packTypes:entry.mask?[entry.maskType]:[], eveningCare:entry.eveningCare||[], memo:'' };
     if (ski>=0) skins[ski]={...skins[ski],...skr}; else skins.push(skr);
     parsed.skins = skins;
   }

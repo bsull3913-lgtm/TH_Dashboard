@@ -904,7 +904,7 @@
       <div class="card-title">오늘 기록</div>
       <div class="form-group" style="margin-bottom:12px">
         <label>날짜</label>
-        <input type="date" id="skinDate">
+        <input type="date" id="skinDate" onchange="selectSkinDate(this.value)">
       </div>
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
         <label style="font-size:14px">마스크팩 했나요?</label>
@@ -913,7 +913,7 @@
       </div>
       <div class="form-group" style="margin-bottom:12px">
         <label>피부 상태</label>
-        <select id="skinStatus">
+        <select id="skinStatus" onchange="autoSaveSkin()">
           <option value="">선택</option>
           <option value="매우좋음">😊 매우 좋음</option>
           <option value="좋음">🙂 좋음</option>
@@ -938,7 +938,7 @@
           <button class="btn btn-outline" onclick="addSkinEveningType()">+</button>
         </div>
       </div>
-      <button class="btn btn-primary" style="width:100%" onclick="addSkin()">저장</button>
+      <div id="skinSaveStatus" style="text-align:center;font-size:12px;color:var(--accent2);min-height:18px"></div>
     </div>
 
     <div class="card">
@@ -965,7 +965,7 @@
     <div class="card-title">피부 케어 기록</div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>날짜</th><th>마스크팩</th><th>피부상태</th><th>팩 종류</th><th></th></tr></thead>
+        <thead><tr><th>날짜</th><th>마스크팩</th><th>피부상태</th><th>팩 종류</th><th>저녁화장품</th><th></th></tr></thead>
         <tbody id="skinTable"></tbody>
       </table>
       <div class="empty-state" id="skinEmpty">피부 케어 기록을 시작해보세요 🧴</div>
@@ -2610,6 +2610,7 @@ function renderSkinPackSelector() {
 function toggleSkinPack(name) {
   selectedSkinPacks.has(name) ? selectedSkinPacks.delete(name) : selectedSkinPacks.add(name);
   renderSkinPackSelector();
+  autoSaveSkin();
 }
 
 function addSkinEveningType() {
@@ -2647,6 +2648,7 @@ function renderSkinEveningSelector() {
 function toggleSkinEvening(name) {
   selectedSkinEvening.has(name) ? selectedSkinEvening.delete(name) : selectedSkinEvening.add(name);
   renderSkinEveningSelector();
+  autoSaveSkin();
 }
 
 function selectSkinDate(dateStr) {
@@ -2700,29 +2702,35 @@ function toggleMask() {
   const lbl = document.getElementById('maskLabel');
   tog.classList.toggle('on', maskOn);
   lbl.textContent = maskOn ? '✓ 마스크팩 했어요' : '안 함';
+  autoSaveSkin();
 }
 
-function addSkin() {
+let _skinSaveTimer = null;
+function autoSaveSkin() {
   const date = document.getElementById('skinDate').value || today();
+  if (!date) return;
+  selectedSkinDate = date;
   const status = document.getElementById('skinStatus').value;
   const packTypes = [...selectedSkinPacks];
   const eveningCare = [...selectedSkinEvening];
   const data = DB.get('skins');
-  const existing = data.findIndex(s => s.date === date);
-  const record = { id: Date.now(), date, mask: maskOn, status, packTypes, eveningCare };
-  if (existing >= 0) data[existing] = record; else data.push(record);
+  const idx = data.findIndex(s => s.date === date);
+  const id = idx >= 0 ? data[idx].id : Date.now();
+  const rec = { id, date, mask: maskOn, status, packTypes, eveningCare };
+  if (idx >= 0) data[idx] = rec; else data.push(rec);
   DB.set('skins', data);
-  document.getElementById('skinStatus').value = '';
-  selectedSkinPacks = new Set();
-  selectedSkinEvening = new Set();
-  maskOn = false;
-  document.getElementById('maskToggle').classList.remove('on');
-  document.getElementById('maskLabel').textContent = '안 함';
-  renderSkinPackSelector();
-  renderSkinEveningSelector();
-  selectedSkinDate = date;
-  renderSkin();
+  renderSkinTable();
+  renderSkinCal();
+  // 저장 표시
+  const ss = document.getElementById('skinSaveStatus');
+  if (ss) {
+    ss.textContent = '✓ 저장됨';
+    clearTimeout(_skinSaveTimer);
+    _skinSaveTimer = setTimeout(() => { if (ss) ss.textContent = ''; }, 1200);
+  }
 }
+
+function addSkin() { autoSaveSkin(); }
 
 function deleteSkin(id) {
   if (!confirm('삭제?')) return;
@@ -2750,11 +2758,7 @@ function renderSkinCal() {
   }, selectedSkinDate, 'selectSkinDate');
 }
 
-function renderSkin() {
-  document.getElementById('skinDate').value = selectedSkinDate || today();
-  renderSkinPackSelector();
-  renderSkinEveningSelector();
-  renderSkinCal();
+function renderSkinTable() {
   const data = DB.get('skins').sort((a,b) => b.date.localeCompare(a.date));
   const tbody = document.getElementById('skinTable');
   const empty = document.getElementById('skinEmpty');
@@ -2767,9 +2771,15 @@ function renderSkin() {
       <td>${r.mask ? '<span class="tag green">✓ 마스크팩</span>' : '<span style="color:var(--text-muted);font-size:13px">-</span>'}</td>
       <td>${r.status ? (statusEmoji[r.status]||'') + ' ' + r.status : '-'}</td>
       <td style="font-size:12px">${(r.packTypes||[]).map(p=>`<span class="tag" style="background:var(--surface2);border:1px solid var(--border);margin:1px">${p}</span>`).join('') || '<span style="color:var(--text-muted)">-</span>'}</td>
+      <td style="font-size:12px">${(r.eveningCare||[]).map(p=>`<span class="tag" style="background:rgba(167,139,250,0.15);border:1px solid rgba(167,139,250,0.3);color:#a78bfa;margin:1px">${p}</span>`).join('') || '<span style="color:var(--text-muted)">-</span>'}</td>
       <td><button class="btn btn-danger" onclick="deleteSkin(${r.id})">삭제</button></td>
     </tr>
   `).join('');
+}
+
+function renderSkin() {
+  selectSkinDate(selectedSkinDate || today());
+  renderSkinTable();
 }
 
 // ═══════════════════════════════════

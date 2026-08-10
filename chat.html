@@ -231,7 +231,7 @@ function newEntry(d) {
     fasted: false,
     eyePain: false, eyeDrop: false,
     supps: [],
-    mask: false, maskType: '', eveningCare: []
+    mask: false, maskType: '', eveningCare: [], skinStatus: ''
   };
 }
 
@@ -272,10 +272,13 @@ function checkExisting(d) {
   } else { missing.push('SUPP'); }
 
   if (skin) {
+    const packs = (skin.packTypes||[]).join(', ') || (skin.mask ? 'O' : 'X');
     const ec = (skin.eveningCare || []).join(', ') || '없음';
-    filled.push(`🧴 팩: ${skin.mask ? (skin.status || 'O') : 'X'} / 저녁: ${ec}`);
-    entry.mask = skin.mask; entry.maskType = skin.status || '';
+    filled.push(`🧴 팩: ${packs} / 저녁: ${ec} / 피부상태: ${skin.status||'-'}`);
+    entry.mask = skin.mask;
+    entry.maskType = (skin.packTypes||[])[0] || '';
     entry.eveningCare = skin.eveningCare || [];
+    entry.skinStatus = skin.status || '';
   } else { missing.push('SKIN'); }
 
   if (filled.length > 0) {
@@ -402,13 +405,18 @@ async function go(val) {
       askSkinEvening(); break;
 
     case 'SKIN_EVENING':
-      if (val === '__SKIP__') { nextStep(); break; }
+      if (val === '__SKIP__') { askSkinStatus(); break; }
       if (val === '__DONE__') {
         entry.eveningCare = [...selectedEveningCare];
         user(entry.eveningCare.length ? entry.eveningCare.join(', ') : '없음');
         setQR([]);
-        nextStep();
+        askSkinStatus();
       } break;
+
+    case 'SKIN_STATUS':
+      if (val === '__SKIP__') { entry.skinStatus = ''; nextStep(); break; }
+      entry.skinStatus = val;
+      nextStep(); break;
 
     case 'CONFIRM':
       if (val === '저장') await saveEntry();
@@ -511,6 +519,11 @@ function askSkin() {
   setQR(['안 함', ...packs], false, true);
   step = 'SKIN';
 }
+function askSkinStatus() {
+  bot('오늘 피부 상태는?');
+  setQR(['매우좋음','좋음','보통','나쁨','매우나쁨'], false, true);
+  step = 'SKIN_STATUS';
+}
 function askSkinEvening() {
   selectedEveningCare = new Set();
   if (entry.eveningCare && entry.eveningCare.length) {
@@ -551,7 +564,7 @@ function showConfirm() {
     `🌙 단식: ${entry.fasted ? 'O' : 'X'}`,
     `👁 눈 통증: ${entry.eyePain ? (entry.eyeDrop?'O(안약O)':'O(안약X)') : 'X'}`,
     `💊 영양제: ${entry.supps.length ? entry.supps.join(', ') : '없음'}`,
-    `🧴 팩: ${entry.mask ? entry.maskType : 'X'} / 저녁: ${ec}`,
+    `🧴 팩: ${entry.mask ? entry.maskType : 'X'} / 저녁: ${ec} / 피부: ${entry.skinStatus||'-'}`,
   ].join('\n'));
   bot('저장할까?');
   setQR(['저장','취소']);
@@ -600,10 +613,10 @@ async function saveEntry() {
   }
 
   // skins
-  if (entry.mask || (entry.eveningCare && entry.eveningCare.length)) {
+  if (entry.mask || (entry.eveningCare && entry.eveningCare.length) || entry.skinStatus) {
     const skins = parsed.skins || [];
     const ski = skins.findIndex(s => s.date === d);
-    const skr = { id:ski>=0?skins[ski].id:ts+5, date:d, mask:entry.mask, status:entry.maskType, packTypes:entry.mask?[entry.maskType]:[], eveningCare:entry.eveningCare||[], memo:'' };
+    const skr = { id:ski>=0?skins[ski].id:ts+5, date:d, mask:entry.mask, status:entry.skinStatus||'', packTypes:entry.mask?[entry.maskType]:[], eveningCare:entry.eveningCare||[], memo:'' };
     if (ski>=0) skins[ski]={...skins[ski],...skr}; else skins.push(skr);
     parsed.skins = skins;
   }

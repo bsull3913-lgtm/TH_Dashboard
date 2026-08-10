@@ -962,6 +962,17 @@
   </div>
 
   <div class="card">
+    <div class="card-title">피부 상태 추이</div>
+    <canvas id="skinStatusChart" style="width:100%;height:160px"></canvas>
+    <div class="empty-state" id="skinStatusChartEmpty" style="display:none">피부 상태 데이터가 없어요</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">피부케어 분석</div>
+    <div id="skinAnalysis"><div class="empty-state">기록이 쌓이면 분석이 나타납니다 🧴</div></div>
+  </div>
+
+  <div class="card">
     <div class="card-title">피부 케어 기록</div>
     <div class="table-wrap">
       <table>
@@ -1452,7 +1463,7 @@ function renderPage(page) {
 // ═══════════════════════════════════
 // UTILITIES
 // ═══════════════════════════════════
-function today() { return new Date().toISOString().split('T')[0]; }
+function today() { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function fmtDate(d) {
   const dt = new Date(d + 'T00:00:00');
   return `${dt.getMonth()+1}/${dt.getDate()}`;
@@ -1480,7 +1491,7 @@ function fmtPace(secPerKm) {
 function getWeekKey(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
   const mon = new Date(d); mon.setDate(d.getDate() - ((d.getDay()+6)%7));
-  return mon.toISOString().slice(0,10);
+  return `${mon.getFullYear()}-${String(mon.getMonth()+1).padStart(2,'0')}-${String(mon.getDate()).padStart(2,'0')}`;
 }
 
 function calcPace(dist, timeStr) {
@@ -1667,7 +1678,7 @@ function renderHomePeriodChart() {
     const dayLabels = ['월','화','수','목','금','토','일'];
     for (let i = 0; i < 7; i++) {
       const d = new Date(now); d.setDate(now.getDate() - dow + i);
-      const ds = d.toISOString().slice(0,10);
+      const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
       labels.push(dayLabels[i]);
       condData.push(condMap[ds]?.score || null);
       sleepData.push(sleepMap[ds]?.score || null);
@@ -1708,7 +1719,7 @@ function renderHomePeriodChart() {
     const qEnd   = new Date(now.getFullYear(), qm + 3, 0); // 분기 마지막 날
     const cur = new Date(qStart);
     while (cur <= qEnd) {
-      const ds = cur.toISOString().slice(0,10);
+      const ds = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`;
       labels.push(`${cur.getMonth()+1}/${cur.getDate()}`);
       condData.push(condMap[ds]?.score || null);
       sleepData.push(sleepMap[ds]?.score || null);
@@ -2196,7 +2207,7 @@ function renderRunning() {
   sorted.forEach(r=>{const wk=getWeekKey(r.date);weekMap[wk]=(weekMap[wk]||0)+parseFloat(r.dist||0);});
   const last12=(()=>{const res=[];const d=new Date(getWeekKey(today())+'T00:00:00');
     for(let i=11;i>=0;i--){const wk=new Date(d);wk.setDate(d.getDate()-i*7);
-      const key=wk.toISOString().slice(0,10); res.push({key,km:+(weekMap[key]||0).toFixed(1)});}return res;})();
+      const key=`${wk.getFullYear()}-${String(wk.getMonth()+1).padStart(2,'0')}-${String(wk.getDate()).padStart(2,'0')}`; res.push({key,km:+(weekMap[key]||0).toFixed(1)});}return res;})();
   if (runWeeklyChart) runWeeklyChart.destroy();
   runWeeklyChart = new Chart(document.getElementById('runWeeklyChart').getContext('2d'),{
     type:'bar', data:{labels:last12.map(w=>w.key.slice(5)),
@@ -2721,6 +2732,8 @@ function autoSaveSkin() {
   DB.set('skins', data);
   renderSkinTable();
   renderSkinCal();
+  renderSkinStatusChart();
+  renderSkinAnalysis();
   // 저장 표시
   const ss = document.getElementById('skinSaveStatus');
   if (ss) {
@@ -2777,9 +2790,158 @@ function renderSkinTable() {
   `).join('');
 }
 
+const SKIN_SCORE_MAP = {'매우좋음':5,'좋음':4,'보통':3,'나쁨':2,'매우나쁨':1};
+const SKIN_SCORE_LABEL = {5:'매우좋음',4:'좋음',3:'보통',2:'나쁨',1:'매우나쁨'};
+let skinStatusChart = null;
+
+function renderSkinStatusChart() {
+  const skins = DB.get('skins').filter(r => r.status && SKIN_SCORE_MAP[r.status] != null)
+    .sort((a,b) => a.date.localeCompare(b.date)).slice(-60);
+  const chartEl  = document.getElementById('skinStatusChart');
+  const emptyEl  = document.getElementById('skinStatusChartEmpty');
+  if (!chartEl) return;
+  if (skins.length === 0) {
+    chartEl.style.display = 'none';
+    if (emptyEl) emptyEl.style.display = 'block';
+    return;
+  }
+  chartEl.style.display = 'block';
+  if (emptyEl) emptyEl.style.display = 'none';
+  chartEl.width  = (chartEl.parentElement.clientWidth || 600);
+  chartEl.height = 160;
+  if (skinStatusChart) { skinStatusChart.destroy(); skinStatusChart = null; }
+  const labels = skins.map(r => r.date.slice(5));
+  const scores = skins.map(r => SKIN_SCORE_MAP[r.status]);
+  const colors = scores.map(s => s >= 4 ? '#5ed8a4' : s === 3 ? '#7c6af7' : '#f76a6a');
+  skinStatusChart = new Chart(chartEl.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data: scores,
+        borderColor: '#7c6af7',
+        backgroundColor: 'rgba(124,106,247,0.08)',
+        pointBackgroundColor: colors,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        tension: 0.3,
+        fill: true
+      }]
+    },
+    options: {
+      responsive: false, maintainAspectRatio: false,
+      scales: {
+        y: {
+          min: 1, max: 5, stepSize: 1,
+          ticks: { color:'#71717a', callback: v => SKIN_SCORE_LABEL[v] || v },
+          grid: { color:'rgba(255,255,255,0.05)' }
+        },
+        x: { ticks: { color:'#71717a', maxTicksLimit: 15, maxRotation: 0 }, grid: { display:false } }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => SKIN_SCORE_LABEL[ctx.parsed.y] || ctx.parsed.y
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderSkinAnalysis() {
+  const el = document.getElementById('skinAnalysis');
+  if (!el) return;
+  const skins  = DB.get('skins');
+  const runs   = DB.get('runs');
+  const sleeps = DB.get('sleeps');
+  const conds  = DB.get('conditions');
+
+  // skin records with valid status score
+  const skinWithScore = skins.filter(r => SKIN_SCORE_MAP[r.status] != null);
+  if (skinWithScore.length < 3) {
+    el.innerHTML = '<div class="empty-state">기록이 3개 이상 쌓이면 분석이 나타납니다 🧴</div>';
+    return;
+  }
+
+  const runMap   = {}; runs.forEach(r   => { runMap[r.date]   = r; });
+  const sleepMap = {}; sleeps.forEach(s => { sleepMap[s.date] = s; });
+  const condMap  = {}; conds.forEach(c  => { condMap[c.date]  = c; });
+
+  const mean = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null;
+
+  // compute effect: avg skin score WITH factor vs WITHOUT
+  function eff(factorFn) {
+    const yes=[], no=[];
+    skinWithScore.forEach(r => {
+      const sc = SKIN_SCORE_MAP[r.status];
+      factorFn(r.date, r) ? yes.push(sc) : no.push(sc);
+    });
+    const my = mean(yes), mn = mean(no);
+    return { avgYes:my, avgNo:mn, nYes:yes.length, nNo:no.length,
+             diff: (my!=null&&mn!=null) ? +(my-mn).toFixed(2) : null };
+  }
+
+  // static factors
+  const factors = [
+    { label:'🧴 마스크팩', fn: (d,r) => !!r.mask },
+    { label:'🛌 수면 ≥75점', fn: d => sleepMap[d]?.score != null && sleepMap[d].score >= 75 },
+    { label:'🏃 러닝',      fn: d => !!runMap[d] },
+    { label:'🍺 음주',      fn: d => !!(condMap[d]?.alcohol) },
+  ];
+
+  // dynamic: evening care types
+  const ecTypes = DB.getObj('skinEveningTypes', { list: [] });
+  const etList = (ecTypes && Array.isArray(ecTypes.list)) ? ecTypes.list : [];
+  etList.forEach(t => {
+    factors.push({ label:`💜 ${t}`, fn: (d,r) => (r.eveningCare||[]).includes(t) });
+  });
+
+  const MIN = 2;
+  const rows = factors.map(f => ({ ...f, e: eff(f.fn) }))
+    .filter(f => f.e.nYes >= MIN || f.e.nNo >= MIN);
+
+  if (rows.length === 0) {
+    el.innerHTML = '<div class="empty-state">요인별 데이터가 부족합니다</div>';
+    return;
+  }
+
+  rows.sort((a,b) => Math.abs(b.e.diff??0) - Math.abs(a.e.diff??0));
+
+  const fmtScore = s => s != null ? s.toFixed(2) : '-';
+  const diffColor = d => d == null ? '#71717a' : d > 0.15 ? '#5ed8a4' : d < -0.15 ? '#f76a6a' : '#71717a';
+  const diffIcon  = d => d == null ? '→' : d > 0.3 ? '↑↑' : d > 0.05 ? '↑' : d < -0.3 ? '↓↓' : d < -0.05 ? '↓' : '→';
+
+  el.innerHTML = `
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">각 요인이 있는 날 vs 없는 날 평균 피부상태 점수(1~5) 차이</div>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>요인</th><th>있는 날 평균</th><th>없는 날 평균</th><th>차이</th><th>샘플</th></tr></thead>
+      <tbody>
+        ${rows.map(f => {
+          const d = f.e.diff;
+          const col = diffColor(d);
+          const icon = diffIcon(d);
+          const insuf = f.e.nYes < MIN || f.e.nNo < MIN;
+          return `<tr>
+            <td style="font-size:13px">${f.label}</td>
+            <td style="text-align:center">${fmtScore(f.e.avgYes)}</td>
+            <td style="text-align:center">${fmtScore(f.e.avgNo)}</td>
+            <td style="text-align:center;color:${col};font-weight:600">${insuf ? '<span style="color:var(--text-muted);font-size:11px">데이터 부족</span>' : `${icon} ${d>0?'+':''}${d}`}</td>
+            <td style="text-align:center;font-size:11px;color:var(--text-muted)">${f.e.nYes}/${f.e.nYes+f.e.nNo}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+    </div>`;
+}
+
 function renderSkin() {
   selectSkinDate(selectedSkinDate || today());
   renderSkinTable();
+  renderSkinStatusChart();
+  renderSkinAnalysis();
 }
 
 // ═══════════════════════════════════
@@ -3811,7 +3973,7 @@ function renderAnalysis() {
   function shiftDate(dateStr, days) {
     const d = new Date(dateStr + 'T00:00:00');
     d.setDate(d.getDate() + days);
-    return d.toISOString().split('T')[0];
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   }
 
   // Compute effect: split condition records by whether windowFn(date) is true
@@ -4418,7 +4580,7 @@ try { // ── 전체 init 오류 방어 ──
     const start = new Date('2026-07-01');
     const end = new Date(td);
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
       const list = dateStr === '2026-07-22' ? ['크레아틴','유산균','오메가3(x3)']
                 : dateStr === '2026-07-24' ? ['크레아틴','오메가3(x3)','비타민C']
                 : dateStr === '2026-07-27' ? ['크레아틴','오메가3','유산균']

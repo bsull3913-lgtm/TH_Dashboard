@@ -1092,6 +1092,14 @@
         </div>
       </div>
       <div class="form-group" style="margin-bottom:14px">
+        <label>운동</label>
+        <div id="exerciseSelector" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;margin-top:6px"></div>
+        <div style="display:flex;gap:6px">
+          <input type="text" id="newExerciseType" placeholder="새 운동 추가..." style="flex:1;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px" onkeydown="if(event.key==='Enter')addExerciseType()">
+          <button class="btn btn-outline" onclick="addExerciseType()">+</button>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
         <label>메모</label>
         <textarea id="condMemo" placeholder="오늘 몸 상태를 자유롭게..." oninput="clearTimeout(window._condMemoTimer);window._condMemoTimer=setTimeout(autoSaveCondition,700)"></textarea>
       </div>
@@ -1121,7 +1129,7 @@
     <div class="card-title">컨디션 기록</div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>날짜</th><th>점수</th><th>M/m/술</th><th>근무</th><th>태그</th><th>메모</th><th></th></tr></thead>
+        <thead><tr><th>날짜</th><th>점수</th><th>M/m/술</th><th>근무</th><th>운동</th><th>태그</th><th>메모</th><th></th></tr></thead>
         <tbody id="condTable"></tbody>
       </table>
       <div class="empty-state" id="condEmpty">매일 컨디션을 기록해보세요 📊</div>
@@ -3247,6 +3255,58 @@ function deleteWorkType(name) {
   renderWorkTypeSelector();
 }
 
+// ── 운동 ──
+let selectedExercises = new Set();
+
+function applyExerciseTypeSeed() {
+  let et = DB.getObj('exerciseTypes', { list: [] });
+  if (!et || !Array.isArray(et.list)) et = { list: [] };
+  if (et.list.length === 0) {
+    ['클라이밍','존2러닝','러닝','헬스'].forEach(t => et.list.push(t));
+    DB.setObj('exerciseTypes', et);
+  }
+}
+
+function renderExerciseSelector() {
+  let types = DB.getObj('exerciseTypes', { list: [] });
+  if (!types || !Array.isArray(types.list)) types = { list: [] };
+  const el = document.getElementById('exerciseSelector');
+  if (!el) return;
+  el.innerHTML = types.list.map(t => {
+    const sel = selectedExercises.has(t);
+    return `<div style="display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border-radius:20px;border:1.5px solid var(--border);cursor:pointer;font-size:12px;background:${sel?'var(--accent2)':'var(--surface2)'};color:${sel?'#fff':'var(--text)'};transition:all 0.15s"
+         onclick="toggleExercise('${t.replace(/'/g,"\\'")}')">
+      ${t}
+      <span onclick="event.stopPropagation();deleteExerciseType('${t.replace(/'/g,"\\'")}'')" style="margin-left:3px;opacity:0.55;font-size:11px;line-height:1">×</span>
+    </div>`;
+  }).join('');
+}
+
+function toggleExercise(name) {
+  selectedExercises.has(name) ? selectedExercises.delete(name) : selectedExercises.add(name);
+  renderExerciseSelector();
+  autoSaveCondition();
+}
+
+function addExerciseType() {
+  const val = document.getElementById('newExerciseType').value.trim();
+  if (!val) return;
+  let types = DB.getObj('exerciseTypes', { list: [] });
+  if (!types || !Array.isArray(types.list)) types = { list: [] };
+  if (!types.list.includes(val)) { types.list.push(val); DB.setObj('exerciseTypes', types); }
+  document.getElementById('newExerciseType').value = '';
+  renderExerciseSelector();
+}
+
+function deleteExerciseType(name) {
+  let types = DB.getObj('exerciseTypes', { list: [] });
+  if (!types || !Array.isArray(types.list)) types = { list: [] };
+  types.list = types.list.filter(t => t !== name);
+  DB.setObj('exerciseTypes', types);
+  selectedExercises.delete(name);
+  renderExerciseSelector();
+}
+
 function autoSaveCondition() {
   const date = document.getElementById('condDate').value || today();
   const score = selectedCondScore;
@@ -3257,7 +3317,7 @@ function autoSaveCondition() {
   const alcohol = document.getElementById('condAlcohol').classList.contains('selected');
   const data = DB.get('conditions');
   const existing = data.findIndex(c => c.date === date);
-  const record = { id: existing >= 0 ? data[existing].id : Date.now(), date, score, tags, memo, mBig, mSmall, alcohol, workType: selectedWorkType };
+  const record = { id: existing >= 0 ? data[existing].id : Date.now(), date, score, tags, memo, mBig, mSmall, alcohol, workType: selectedWorkType, exercises: [...selectedExercises] };
   if (existing >= 0) data[existing] = record; else data.push(record);
   DB.set('conditions', data);
   // 저장 표시
@@ -3319,6 +3379,9 @@ function selectCondDate(dateStr) {
   // 근무형태 복원
   selectedWorkType = rec?.workType || null;
   renderWorkTypeSelector();
+  // 운동 복원
+  selectedExercises = new Set(rec?.exercises || []);
+  renderExerciseSelector();
   // detail panel
   const scoreLabel = ['','😣 매우나쁨','😟 나쁨','😐 보통','😊 좋음','🤩 매우좋음'];
   const el = document.getElementById('condCalDetail');
@@ -3334,6 +3397,7 @@ function selectCondDate(dateStr) {
       </div>` : ''}
       <div class="cal-detail-row" style="flex-wrap:wrap;gap:6px">
         ${rec.workType ? `<span class="cal-detail-badge" style="background:var(--surface3);color:var(--text)">🏢 ${rec.workType}</span>` : ''}
+        ${(rec.exercises||[]).map(e=>`<span class="cal-detail-badge" style="background:rgba(94,216,164,0.15);color:var(--accent2)">🏋️ ${e}</span>`).join('')}
         ${rec.mBig    ? `<span class="cal-detail-badge yes">M</span>` : ''}
         ${rec.mSmall  ? `<span class="cal-detail-badge yes">m</span>` : ''}
         ${rec.alcohol ? `<span class="cal-detail-badge red">🍺 음주</span>` : ''}
@@ -3347,8 +3411,10 @@ function selectCondDate(dateStr) {
 
 function renderCondition() {
   document.getElementById('condDate').value = selectedCondDate || today();
+  applyExerciseTypeSeed();
   renderCondScoreChips();
   renderWorkTypeSelector();
+  renderExerciseSelector();
   renderCondCal();
   const data = DB.get('conditions').sort((a,b) => a.date.localeCompare(b.date));
 
@@ -3407,6 +3473,7 @@ function renderCondTable() {
         ${!r.mBig && !r.mSmall && !r.alcohol ? `<span style="color:var(--text-muted);font-size:12px">-</span>` : ''}
       </td>
       <td style="font-size:12px;color:var(--text-muted)">${r.workType || '-'}</td>
+      <td style="font-size:12px">${(r.exercises||[]).map(e=>`<span class="tag" style="background:rgba(94,216,164,0.15);border:1px solid rgba(94,216,164,0.3);color:var(--accent2);margin:1px">${e}</span>`).join('') || '<span style="color:var(--text-muted)">-</span>'}</td>
       <td>${(r.tags||[]).map(t => `<span class="tag" style="font-size:11px">${t}</span>`).join('')}</td>
       <td style="color:var(--text-muted);font-size:13px">${r.memo || ''}</td>
       <td><button class="btn btn-danger" onclick="deleteCondition(${r.id})">삭제</button></td>
@@ -4028,6 +4095,15 @@ function renderAnalysis() {
     { key:'m',    label:'m',             col:'#f7c26a',  desc:'' },
   ];
 
+  // 운동 종류 팩터 동적 추가
+  const exTypes = DB.getObj('exerciseTypes', { list: [] });
+  const exList = (exTypes && Array.isArray(exTypes.list)) ? exTypes.list : [];
+  exList.forEach(t => {
+    const key = 'ex_' + t;
+    BASE[key] = d => (condMap[d]?.exercises||[]).includes(t);
+    FACTORS.push({ key, label:`🏋️ ${t}`, col:'#5ed8a4', desc:`운동: ${t}` });
+  });
+
   // 습관 팩터 동적 추가 (inAnalysis: true인 것만)
   const habits = DB.get('habits').filter(h => h.inAnalysis);
   habits.forEach(h => {
@@ -4483,6 +4559,7 @@ try { // ── 전체 init 오류 방어 ──
   // ── 피부 시드 먼저 (Gist pull 전에 기본 데이터 확보)
   applySkinSeed();
   applySkinTypeSeed();
+  applyExerciseTypeSeed();
 
   // ── Gist pull을 백그라운드로 (await 없이) → seed/renderHome 즉시 실행
   if (GistSync.isConfigured()) {
@@ -4799,7 +4876,7 @@ window.addEventListener('load', () => {
 // ═══════════════════════════════════
 // GITHUB GIST SYNC
 // ═══════════════════════════════════
-const SYNC_KEYS = ['conditions','runs','fastings','eyes','skins','sleeps','suppRecords','suppTypes','inbody','runnerGoal','habits','skinPackTypes','skinEveningTypes','workTypes'];
+const SYNC_KEYS = ['conditions','runs','fastings','eyes','skins','sleeps','suppRecords','suppTypes','inbody','runnerGoal','habits','skinPackTypes','skinEveningTypes','workTypes','exerciseTypes'];
 
 const GistSync = {
   get token()  { return localStorage.getItem('gist_token')  || ''; },
@@ -4842,6 +4919,7 @@ const GistSync = {
       // 시드 복원 — 실패해도 re-render는 반드시 실행
       try { applySkinSeed(); } catch(e) { console.error('[applySkinSeed]', e); }
       try { applySkinTypeSeed(); } catch(e) { console.error('[applySkinTypeSeed]', e); }
+      try { applyExerciseTypeSeed(); } catch(e) { console.error('[applyExerciseTypeSeed]', e); }
       const now = new Date();
       const ts = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
       setSyncStatus('ok', `✓ ${ts} 불러옴`);

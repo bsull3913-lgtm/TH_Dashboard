@@ -91,7 +91,7 @@ const GIST_FILE = 'health_data.json';
 const SYNC_KEYS = [
   'conditions','runs','fastings','eyes','skins','sleeps',
   'suppRecords','suppTypes','inbody','runnerGoal',
-  'habits','skinPackTypes','skinEveningTypes','workTypes'
+  'habits','skinPackTypes','skinEveningTypes','workTypes','exerciseTypes'
 ];
 let gToken = localStorage.getItem('gist_token') || '';
 let gId    = localStorage.getItem('gist_id')    || '';
@@ -100,6 +100,7 @@ let step = 'INIT';
 let entry = {};
 let selectedSupps = new Set();
 let selectedEveningCare = new Set();
+let selectedExercises = new Set();
 let stepsQueue = [];
 
 // ── Gist API ──
@@ -147,6 +148,12 @@ function getPackList() {
   if (pt && pt.list && pt.list.length) return pt.list;
   if (Array.isArray(pt) && pt.length) return pt;
   return ['파티온팩','Azelaic Acid팩','기타'];
+}
+function getExerciseList() {
+  const et = parsed.exerciseTypes;
+  if (et && et.list && et.list.length) return et.list;
+  if (Array.isArray(et) && et.length) return et;
+  return ['클라이밍','존2러닝','러닝','헬스'];
 }
 function getEveningList() {
   const et = parsed.skinEveningTypes;
@@ -231,7 +238,8 @@ function newEntry(d) {
     fasted: false,
     eyePain: false, eyeDrop: false,
     supps: [],
-    mask: false, maskType: '', eveningCare: [], skinStatus: ''
+    mask: false, maskType: '', eveningCare: [], skinStatus: '',
+    exercises: []
   };
 }
 
@@ -250,11 +258,16 @@ function checkExisting(d) {
   if (cond) {
     const mms = [cond.mBig?'M':'', cond.mSmall?'m':'', cond.alcohol?'술':''].filter(Boolean).join('+') || '없음';
     const wt = cond.workType ? `  근무: ${cond.workType}` : '';
-    filled.push(`💪 컨디션: ${cond.score ?? '-'}점  M/m/술: ${mms}${wt}`);
+    const ex = (cond.exercises||[]).length ? `  운동: ${cond.exercises.join(', ')}` : '';
+    filled.push(`💪 컨디션: ${cond.score ?? '-'}점  M/m/술: ${mms}${wt}${ex}`);
     entry.score = cond.score ?? null;
     entry.workType = cond.workType || null;
     entry.mBig = cond.mBig; entry.mSmall = cond.mSmall; entry.alcohol = cond.alcohol;
-  } else { missing.push('CONDITION'); }
+    entry.exercises = cond.exercises || [];
+    if (entry.exercises.length) {
+      /* 운동 이미 기록됨 — EXERCISE 스킵 */
+    } else { missing.push('EXERCISE'); }
+  } else { missing.push('CONDITION'); missing.push('EXERCISE'); }
 
   if (fast) {
     filled.push(`🌙 단식: ${fast.fasted ? 'O' : 'X'}`);
@@ -301,6 +314,7 @@ function nextStep() {
   if (stepsQueue.length === 0) { showConfirm(); return; }
   const s = stepsQueue.shift();
   if (s === 'CONDITION') askCondition();
+  else if (s === 'EXERCISE') askExercise();
   else if (s === 'FAST') askFast();
   else if (s === 'EYE')  askEye();
   else if (s === 'SUPP') askSupp();
@@ -377,6 +391,15 @@ async function go(val) {
       entry.mSmall  = val.startsWith('m') || val.includes('+m');
       entry.alcohol = val.includes('술');
       nextStep(); break;
+
+    case 'EXERCISE':
+      if (val === '__SKIP__') { entry.exercises = []; nextStep(); break; }
+      if (val === '__DONE__') {
+        entry.exercises = [...selectedExercises];
+        user(entry.exercises.length ? entry.exercises.join(', ') : '없음');
+        setQR([]);
+        nextStep();
+      } break;
 
     case 'FAST':
       if (val === '__SKIP__') { nextStep(); break; }
@@ -519,6 +542,32 @@ function askSkin() {
   setQR(['안 함', ...packs], false, true);
   step = 'SKIN';
 }
+function askExercise() {
+  selectedExercises = new Set(entry.exercises || []);
+  bot('오늘 운동했어? (복수 선택 후 완료)');
+  const opts = getExerciseList();
+  const wrap = document.getElementById('qrWrap');
+  wrap.innerHTML = '';
+  opts.forEach(o => {
+    const b = document.createElement('button');
+    b.className = 'qr' + (selectedExercises.has(o) ? ' on' : '');
+    b.textContent = o;
+    b.onclick = () => {
+      if (selectedExercises.has(o)) { selectedExercises.delete(o); b.classList.remove('on'); }
+      else { selectedExercises.add(o); b.classList.add('on'); }
+    };
+    wrap.appendChild(b);
+  });
+  const done = document.createElement('button');
+  done.className = 'qr done-btn'; done.textContent = '✓ 완료';
+  done.onclick = () => go('__DONE__');
+  wrap.appendChild(done);
+  const skip = document.createElement('button');
+  skip.className = 'qr skip-btn'; skip.textContent = '건너뛰기';
+  skip.onclick = () => { user('건너뛰기'); setQR([]); go('__SKIP__'); };
+  wrap.appendChild(skip);
+  step = 'EXERCISE';
+}
 function askSkinStatus() {
   bot('오늘 피부 상태는?');
   setQR(['매우좋음','좋음','보통','나쁨','매우나쁨'], false, true);
@@ -561,6 +610,7 @@ function showConfirm() {
   bot([
     `📅 ${entry.date}`,
     `💪 컨디션: ${entry.score ?? '-'}점  근무: ${wt}  M/m/술: ${mms}`,
+    `🏋️ 운동: ${entry.exercises && entry.exercises.length ? entry.exercises.join(', ') : '없음'}`,
     `🌙 단식: ${entry.fasted ? 'O' : 'X'}`,
     `👁 눈 통증: ${entry.eyePain ? (entry.eyeDrop?'O(안약O)':'O(안약X)') : 'X'}`,
     `💊 영양제: ${entry.supps.length ? entry.supps.join(', ') : '없음'}`,
@@ -582,6 +632,7 @@ async function saveEntry() {
     id: ci>=0?conds[ci].id:ts, date:d,
     score: entry.score, workType: entry.workType,
     mBig: entry.mBig, mSmall: entry.mSmall, alcohol: entry.alcohol,
+    exercises: entry.exercises || [],
     tags: [], memo: ''
   };
   if (ci>=0) conds[ci]={...conds[ci],...cr}; else conds.push(cr);
@@ -634,7 +685,7 @@ async function saveEntry() {
 }
 
 function resetEntry() {
-  entry = newEntry(); selectedSupps = new Set(); stepsQueue = [];
+  entry = newEntry(); selectedSupps = new Set(); selectedEveningCare = new Set(); selectedExercises = new Set(); stepsQueue = [];
 }
 
 // ── Init ──

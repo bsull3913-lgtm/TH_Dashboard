@@ -1741,6 +1741,7 @@ function renderHomePeriodChart() {
       maskData.push(!!(skinMap[ds]?.mask));
       mBigData.push(!!(condMap[ds]?.mBig));
       mSmallData.push(!!(condMap[ds]?.mSmall));
+      exerciseData.push((condMap[ds]?.exercises||[]).length > 0);
       cur.setDate(cur.getDate() + 1);
     }
     const qNames = ['1분기','2분기','3분기','4분기'];
@@ -1765,6 +1766,7 @@ function renderHomePeriodChart() {
       maskData.push(mDates.filter(d => skinMap[d]?.mask).length);
       mBigData.push(mDates.filter(d => condMap[d]?.mBig).length);
       mSmallData.push(mDates.filter(d => condMap[d]?.mSmall).length);
+      exerciseData.push(mDates.filter(d => (condMap[d]?.exercises||[]).length > 0).length);
     }
     periodTitle = `${y}년`;
   }
@@ -1797,9 +1799,9 @@ function renderHomePeriodChart() {
     const dotSize = homePeriod === 'week' ? 26 : 12;
     const gap = homePeriod === 'week' ? 4 : 2;
     const events = [
-      { icon: '🌙', label: '단식',   data: fastData,                    color: '#7c6af7' },
-      { icon: '🏃', label: '러닝',   data: runData.map(v => (v||0)>0),  color: '#7c6af7' },
-      { icon: '🍺', label: '음주',   data: alcoholData,                 color: '#f7c26a' },
+      { icon: '🌙', label: '단식',   data: fastData,      color: '#7c6af7' },
+      { icon: '🏋️', label: '운동',   data: exerciseData,  color: '#5ed8a4' },
+      { icon: '🍺', label: '음주',   data: alcoholData,   color: '#f7c26a' },
       { icon: '👁', label: '눈통증', data: eyeData,                     color: '#f7706a' },
       { icon: '🧴', label: '마스크', data: maskData,                    color: '#5ed8a4' },
       { icon: 'M',  label: '',       data: mBigData,                    color: '#f7706a' },
@@ -1852,9 +1854,9 @@ function renderHomePeriodChart() {
     const totalDays = homePeriod === 'year' ? dateSets.flat().length : labels.length;
     const cnt = arr => arr.reduce((a, b) => a + (b ? 1 : 0), 0);
     const totals = [
-      { icon: '🌙', label: '단식',    count: cnt(fastData),    color: '#7c6af7' },
-      { icon: '🏃', label: '러닝',    count: cnt(runData.map(v=>(v||0)>0)), color: 'var(--accent)' },
-      { icon: '🍺', label: '음주',    count: cnt(alcoholData), color: '#f7c26a' },
+      { icon: '🌙', label: '단식',    count: cnt(fastData),      color: '#7c6af7' },
+      { icon: '🏋️', label: '운동',    count: cnt(exerciseData),  color: '#5ed8a4' },
+      { icon: '🍺', label: '음주',    count: cnt(alcoholData),   color: '#f7c26a' },
       { icon: '👁', label: '눈통증',  count: cnt(eyeData),     color: '#f7706a' },
       { icon: '🧴', label: '마스크팩',count: cnt(maskData),    color: '#5ed8a4' },
       { icon: 'M',  label: 'M',       count: cnt(mBigData),    color: '#f7706a' },

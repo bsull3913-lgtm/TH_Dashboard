@@ -4149,13 +4149,11 @@ function renderAnalysis() {
 
   // 효과 크기 기준으로 정렬 (절대값 최대 효과 내림차순)
   const MIN_SAMPLES = 3;
-  const posScore = key => {
-    const vals = ['D0','D1','D2'].map(wk => EFF[key][wk])
-      .filter(e => e.diff != null && e.nYes >= MIN_SAMPLES)
-      .map(e => e.diff);
-    return vals.length ? vals.reduce((a,b) => a+b, 0) / vals.length : -99;
-  };
-  FACTORS.sort((a, b) => posScore(b.key) - posScore(a.key));
+  FACTORS.sort((a, b) => {
+    const maxA = Math.max(...WINDOWS.map(w => EFF[a.key][w.key].nYes >= MIN_SAMPLES ? Math.abs(EFF[a.key][w.key].diff ?? 0) : 0));
+    const maxB = Math.max(...WINDOWS.map(w => EFF[b.key][w.key].nYes >= MIN_SAMPLES ? Math.abs(EFF[b.key][w.key].diff ?? 0) : 0));
+    return maxB - maxA;
+  });
 
   // ── [HERO] Multi-window table
   const cellHtml = (e, isBest) => {

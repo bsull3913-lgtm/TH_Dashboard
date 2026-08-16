@@ -1805,7 +1805,7 @@ function renderHomePeriodChart() {
 
     if (events.length > 0) {
       const headerRow = homePeriod === 'week'
-        ? `<tr><th style="position:sticky;left:0;background:var(--surface);z-index:2;padding:0 8px 4px 0;min-width:52px"></th>${labels.map(l=>`<th style="padding:0 ${gap/2}px 4px;font-weight:400;color:var(--text-muted);font-size:10px;min-width:${dotSize}px;text-align:center">${l}</th>`).join('')}</tr>`
+        ? `<tr><th style="position:sticky;left:0;background:var(--surface);z-index:2;padding:0 8px 4px 0;min-width:52px"></th>${labels.map(l=>`<th style="padding:0 ${gap/2}px 4px;font-weight:400;color:var(--text-muted);font-size:10px;min-width:${dotSize}px;text-align:center">${l}</th>`).join('')}<th></th></tr>`
         : '';
       const dataRows = events.map(ev => {
         const lbl = ev.label ? `${ev.icon} ${ev.label}` : `<strong>${ev.icon}</strong>`;

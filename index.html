@@ -4150,9 +4150,9 @@ function renderAnalysis() {
   // 효과 크기 기준으로 정렬 (절대값 최대 효과 내림차순)
   const MIN_SAMPLES = 3;
   FACTORS.sort((a, b) => {
-    const maxA = Math.max(...WINDOWS.map(w => EFF[a.key][w.key].nYes >= MIN_SAMPLES ? Math.abs(EFF[a.key][w.key].diff ?? 0) : 0));
-    const maxB = Math.max(...WINDOWS.map(w => EFF[b.key][w.key].nYes >= MIN_SAMPLES ? Math.abs(EFF[b.key][w.key].diff ?? 0) : 0));
-    return maxB - maxA;
+    const bestA = Math.max(...WINDOWS.map(w => EFF[a.key][w.key].nYes >= MIN_SAMPLES ? (EFF[a.key][w.key].diff ?? -99) : -99));
+    const bestB = Math.max(...WINDOWS.map(w => EFF[b.key][w.key].nYes >= MIN_SAMPLES ? (EFF[b.key][w.key].diff ?? -99) : -99));
+    return bestB - bestA;
   });
 
   // ── [HERO] Multi-window table

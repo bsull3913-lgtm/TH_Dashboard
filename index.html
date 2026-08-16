@@ -1806,16 +1806,15 @@ function renderHomePeriodChart() {
 
     if (events.length > 0) {
       const headerRow = homePeriod === 'week'
-        ? `<tr><th style="position:sticky;left:0;background:var(--surface);z-index:2;padding:0 8px 4px 0;min-width:60px"></th>${labels.map((l,i)=>`<th style="padding:0 ${gap/2}px 4px;font-weight:400;color:var(--text-muted);font-size:10px;min-width:${dotSize}px;text-align:center;line-height:1.4">${l}<br><span style="font-size:9px;opacity:0.7">${dateNums[i]}</span></th>`).join('')}</tr>`
-        : `<tr><th style="position:sticky;left:0;background:var(--surface);z-index:2;padding:0 8px 4px 0;min-width:60px"></th>${labels.map(l=>`<th style="padding:0 ${gap/2}px 4px;font-weight:400;color:var(--text-muted);font-size:9px;min-width:${dotSize}px;text-align:center">${l}</th>`).join('')}</tr>`;
+        ? `<tr><th style="position:sticky;left:0;background:var(--surface);z-index:2;padding:0 8px 4px 0"></th>${labels.map((l,i)=>`<th style="padding:0 ${gap/2}px 4px;font-weight:400;color:var(--text-muted);font-size:10px;min-width:${dotSize}px;text-align:center;line-height:1.4">${l}<br><span style="font-size:9px;opacity:0.7">${dateNums[i]}</span></th>`).join('')}<th></th></tr>`
+        : `<tr><th style="position:sticky;left:0;background:var(--surface);z-index:2;padding:0 8px 4px 0"></th>${labels.map(l=>`<th style="padding:0 ${gap/2}px 4px;font-weight:400;color:var(--text-muted);font-size:9px;min-width:${dotSize}px;text-align:center">${l}</th>`).join('')}<th></th></tr>`;
       const dataRows = events.map(ev => {
-        const cnt = ev.data.filter(Boolean).length;
         const lbl = ev.label ? `${ev.icon} ${ev.label}` : `<strong>${ev.icon}</strong>`;
-        const cntSpan = `<span style="color:${ev.color};font-weight:600;margin-left:4px">${cnt}일</span>`;
+        const cnt = ev.data.filter(Boolean).length;
         const cells = ev.data.map(v =>
           `<td style="padding:${gap/2}px"><div style="width:${dotSize}px;height:${dotSize}px;border-radius:50%;background:${v ? ev.color : 'rgba(60,60,80,0.25)'};border:1.5px solid ${v ? ev.color : 'var(--border)'}"></div></td>`
         ).join('');
-        return `<tr><td style="position:sticky;left:0;background:var(--surface);z-index:1;padding:${gap/2}px 8px ${gap/2}px 0;font-size:11px;color:var(--text-muted);white-space:nowrap">${lbl}${cntSpan}</td>${cells}</tr>`;
+        return `<tr><td style="position:sticky;left:0;background:var(--surface);z-index:1;padding:${gap/2}px 8px ${gap/2}px 0;font-size:11px;color:var(--text-muted);white-space:nowrap">${lbl}</td>${cells}<td style="padding:${gap/2}px 0 ${gap/2}px 6px;font-size:11px;color:${ev.color};font-weight:600;white-space:nowrap">${cnt}일</td></tr>`;
       }).join('');
       eventHtml = `
         <div style="margin-top:14px">

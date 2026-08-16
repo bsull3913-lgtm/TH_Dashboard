@@ -1677,7 +1677,7 @@ function renderHomePeriodChart() {
   const isDaily = homePeriod === 'week' || homePeriod === 'month' || homePeriod === 'quarter';
 
   let labels = [], dateNums = [], condData = [], sleepData = [], runData = [];
-  let fastData = [], alcoholData = [], eyeData = [], maskData = [], mBigData = [], mSmallData = [];
+  let fastData = [], alcoholData = [], eyeData = [], maskData = [], mBigData = [], mSmallData = [], exerciseData = [];
   let dateSets = []; // for aggregated periods (year only)
   let periodTitle = '';
 
@@ -1698,6 +1698,7 @@ function renderHomePeriodChart() {
       maskData.push(!!(skinMap[ds]?.mask));
       mBigData.push(!!(condMap[ds]?.mBig));
       mSmallData.push(!!(condMap[ds]?.mSmall));
+      exerciseData.push((condMap[ds]?.exercises||[]).length > 0);
     }
     periodTitle = `${now.getFullYear()}년 ${now.getMonth()+1}월 이번주`;
   }
@@ -1718,6 +1719,7 @@ function renderHomePeriodChart() {
       maskData.push(!!(skinMap[ds]?.mask));
       mBigData.push(!!(condMap[ds]?.mBig));
       mSmallData.push(!!(condMap[ds]?.mSmall));
+      exerciseData.push((condMap[ds]?.exercises||[]).length > 0);
     }
     periodTitle = `${y}년 ${m+1}월`;
   }

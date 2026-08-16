@@ -1802,7 +1802,7 @@ function renderHomePeriodChart() {
       { icon: '🧴', label: '마스크', data: maskData,                    color: '#5ed8a4' },
       { icon: 'M',  label: '',       data: mBigData,                    color: '#f7706a' },
       { icon: 'm',  label: '',       data: mSmallData,                  color: '#f7a06a' },
-    ].filter(e => e.data.some(Boolean));
+    ].filter(e => ['M','m'].includes(e.icon) ? true : e.data.some(Boolean));
 
     if (events.length > 0) {
       const colW = dotSize + gap;
@@ -1855,8 +1855,8 @@ function renderHomePeriodChart() {
       { icon: '🍺', label: '음주',    count: cnt(alcoholData), color: '#f7c26a' },
       { icon: '👁', label: '눈통증',  count: cnt(eyeData),     color: '#f7706a' },
       { icon: '🧴', label: '마스크팩',count: cnt(maskData),    color: '#5ed8a4' },
-      { icon: 'M',  label: '생리(대)',count: cnt(mBigData),    color: '#f7706a' },
-      { icon: 'm',  label: '생리(소)',count: cnt(mSmallData),  color: '#f7a06a' },
+      { icon: 'M',  label: 'M',       count: cnt(mBigData),    color: '#f7706a' },
+      { icon: 'm',  label: 'm',       count: cnt(mSmallData),  color: '#f7a06a' },
     ].filter(e => e.count > 0);
 
     if (totals.length > 0) {

@@ -1698,7 +1698,7 @@ function renderHomePeriodChart() {
       maskData.push(!!(skinMap[ds]?.mask));
       mBigData.push(!!(condMap[ds]?.mBig));
       mSmallData.push(!!(condMap[ds]?.mSmall));
-      exerciseData.push((condMap[ds]?.exercises||[]).length > 0);
+      exerciseData.push((condMap[ds]?.exercises||[]).length > 0 || (parseFloat(runMap[ds]?.dist)||0) > 0);
     }
     periodTitle = `${now.getFullYear()}년 ${now.getMonth()+1}월 이번주`;
   }
@@ -1719,7 +1719,7 @@ function renderHomePeriodChart() {
       maskData.push(!!(skinMap[ds]?.mask));
       mBigData.push(!!(condMap[ds]?.mBig));
       mSmallData.push(!!(condMap[ds]?.mSmall));
-      exerciseData.push((condMap[ds]?.exercises||[]).length > 0);
+      exerciseData.push((condMap[ds]?.exercises||[]).length > 0 || (parseFloat(runMap[ds]?.dist)||0) > 0);
     }
     periodTitle = `${y}년 ${m+1}월`;
   }
@@ -1741,7 +1741,7 @@ function renderHomePeriodChart() {
       maskData.push(!!(skinMap[ds]?.mask));
       mBigData.push(!!(condMap[ds]?.mBig));
       mSmallData.push(!!(condMap[ds]?.mSmall));
-      exerciseData.push((condMap[ds]?.exercises||[]).length > 0);
+      exerciseData.push((condMap[ds]?.exercises||[]).length > 0 || (parseFloat(runMap[ds]?.dist)||0) > 0);
       cur.setDate(cur.getDate() + 1);
     }
     const qNames = ['1분기','2분기','3분기','4분기'];
@@ -1766,7 +1766,7 @@ function renderHomePeriodChart() {
       maskData.push(mDates.filter(d => skinMap[d]?.mask).length);
       mBigData.push(mDates.filter(d => condMap[d]?.mBig).length);
       mSmallData.push(mDates.filter(d => condMap[d]?.mSmall).length);
-      exerciseData.push(mDates.filter(d => (condMap[d]?.exercises||[]).length > 0).length);
+      exerciseData.push(mDates.filter(d => (condMap[d]?.exercises||[]).length > 0 || (parseFloat(runMap[d]?.dist)||0) > 0).length);
     }
     periodTitle = `${y}년`;
   }

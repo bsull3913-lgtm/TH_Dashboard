@@ -1676,7 +1676,7 @@ function renderHomePeriodChart() {
   const now = new Date();
   const isDaily = homePeriod === 'week' || homePeriod === 'month' || homePeriod === 'quarter';
 
-  let labels = [], condData = [], sleepData = [], runData = [];
+  let labels = [], dateNums = [], condData = [], sleepData = [], runData = [];
   let fastData = [], alcoholData = [], eyeData = [], maskData = [], mBigData = [], mSmallData = [];
   let dateSets = []; // for aggregated periods (year only)
   let periodTitle = '';
@@ -1688,6 +1688,7 @@ function renderHomePeriodChart() {
       const d = new Date(now); d.setDate(now.getDate() - dow + i);
       const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
       labels.push(dayLabels[i]);
+      dateNums.push(d.getDate());
       condData.push(condMap[ds]?.score || null);
       sleepData.push(sleepMap[ds]?.score || null);
       runData.push(parseFloat(runMap[ds]?.dist) || null);
@@ -1805,8 +1806,8 @@ function renderHomePeriodChart() {
 
     if (events.length > 0) {
       const headerRow = homePeriod === 'week'
-        ? `<tr><th style="position:sticky;left:0;background:var(--surface);z-index:2;padding:0 8px 4px 0;min-width:52px"></th>${labels.map(l=>`<th style="padding:0 ${gap/2}px 4px;font-weight:400;color:var(--text-muted);font-size:10px;min-width:${dotSize}px;text-align:center">${l}</th>`).join('')}<th></th></tr>`
-        : '';
+        ? `<tr><th style="position:sticky;left:0;background:var(--surface);z-index:2;padding:0 8px 4px 0;min-width:52px"></th>${labels.map((l,i)=>`<th style="padding:0 ${gap/2}px 4px;font-weight:400;color:var(--text-muted);font-size:10px;min-width:${dotSize}px;text-align:center;line-height:1.4">${l}<br><span style="font-size:9px;opacity:0.7">${dateNums[i]}</span></th>`).join('')}<th></th></tr>`
+        : `<tr><th style="position:sticky;left:0;background:var(--surface);z-index:2;padding:0 8px 4px 0;min-width:52px"></th>${labels.map(l=>`<th style="padding:0 ${gap/2}px 4px;font-weight:400;color:var(--text-muted);font-size:9px;min-width:${dotSize}px;text-align:center">${l}</th>`).join('')}<th></th></tr>`;
       const dataRows = events.map(ev => {
         const lbl = ev.label ? `${ev.icon} ${ev.label}` : `<strong>${ev.icon}</strong>`;
         const cnt = ev.data.filter(Boolean).length;

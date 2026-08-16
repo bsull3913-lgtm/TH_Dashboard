@@ -1805,22 +1805,42 @@ function renderHomePeriodChart() {
     ].filter(e => e.data.some(Boolean));
 
     if (events.length > 0) {
-      const headerRow = homePeriod === 'week'
-        ? `<tr><th style="position:sticky;left:0;background:var(--surface);z-index:2;padding:0 8px 4px 0"></th>${labels.map((l,i)=>`<th style="padding:0 ${gap/2}px 4px;font-weight:400;color:var(--text-muted);font-size:10px;min-width:${dotSize}px;text-align:center;line-height:1.4">${l}<br><span style="font-size:9px;opacity:0.7">${dateNums[i]}</span></th>`).join('')}<th></th></tr>`
-        : `<tr><th style="position:sticky;left:0;background:var(--surface);z-index:2;padding:0 8px 4px 0"></th>${labels.map(l=>`<th style="padding:0 ${gap/2}px 4px;font-weight:400;color:var(--text-muted);font-size:9px;min-width:${dotSize}px;text-align:center">${l}</th>`).join('')}<th></th></tr>`;
-      const dataRows = events.map(ev => {
-        const lbl = ev.label ? `${ev.icon} ${ev.label}` : `<strong>${ev.icon}</strong>`;
-        const cnt = ev.data.filter(Boolean).length;
-        const cells = ev.data.map(v =>
-          `<td style="padding:${gap/2}px"><div style="width:${dotSize}px;height:${dotSize}px;border-radius:50%;background:${v ? ev.color : 'rgba(60,60,80,0.25)'};border:1.5px solid ${v ? ev.color : 'var(--border)'}"></div></td>`
-        ).join('');
-        return `<tr><td style="position:sticky;left:0;background:var(--surface);z-index:1;padding:${gap/2}px 8px ${gap/2}px 0;font-size:11px;color:var(--text-muted);white-space:nowrap">${lbl}</td>${cells}<td style="padding:${gap/2}px 0 ${gap/2}px 6px;font-size:11px;color:${ev.color};font-weight:600;white-space:nowrap">${cnt}일</td></tr>`;
+      const colW = dotSize + gap;
+      const rowH = dotSize + gap;
+      const headerH = homePeriod === 'week' ? 36 : 22;
+
+      // 레이블 열 (sticky)
+      const labelCol = `<div style="position:sticky;left:0;background:var(--surface);z-index:1;flex-shrink:0">
+        <div style="height:${headerH}px"></div>
+        ${events.map(ev => {
+          const lbl = ev.label ? `${ev.icon} ${ev.label}` : `<strong>${ev.icon}</strong>`;
+          const cnt = ev.data.filter(Boolean).length;
+          return `<div style="height:${rowH}px;display:flex;align-items:center;font-size:11px;color:var(--text-muted);white-space:nowrap;padding-right:10px">${lbl}&nbsp;<span style="color:${ev.color};font-weight:600">${cnt}일</span></div>`;
+        }).join('')}
+      </div>`;
+
+      // 날짜 열들 (헤더 + 도트 수직 쌓기)
+      const dayCols = labels.map((l, i) => {
+        const hdr = homePeriod === 'week'
+          ? `<div style="font-size:10px;line-height:1.3;text-align:center">${l}<br><span style="font-size:9px;opacity:0.65">${dateNums[i]}</span></div>`
+          : `<div style="font-size:9px;text-align:center">${l}</div>`;
+        const dots = events.map(ev => {
+          const v = ev.data[i];
+          return `<div style="width:${colW}px;height:${rowH}px;display:flex;align-items:center;justify-content:center">
+            <div style="width:${dotSize}px;height:${dotSize}px;border-radius:50%;background:${v ? ev.color : 'rgba(60,60,80,0.25)'};border:1.5px solid ${v ? ev.color : 'var(--border)'}"></div>
+          </div>`;
+        }).join('');
+        return `<div style="display:flex;flex-direction:column;align-items:center;width:${colW}px;flex-shrink:0">
+          <div style="height:${headerH}px;width:${colW}px;display:flex;align-items:center;justify-content:center;color:var(--text-muted)">${hdr}</div>
+          ${dots}
+        </div>`;
       }).join('');
+
       eventHtml = `
         <div style="margin-top:14px">
           <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">📋 이벤트</div>
           <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
-            <table style="border-collapse:collapse;font-size:11px">${headerRow}${dataRows}</table>
+            <div style="display:flex">${labelCol}${dayCols}</div>
           </div>
         </div>`;
     }

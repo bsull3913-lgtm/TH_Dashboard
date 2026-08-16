@@ -4150,7 +4150,7 @@ function renderAnalysis() {
   // 효과 크기 기준으로 정렬 (절대값 최대 효과 내림차순)
   const MIN_SAMPLES = 3;
   const posScore = key => {
-    const vals = ['D0','D1','D2'].map(wk => EFF[key][wk])
+    const vals = ['D0','D1','D23'].map(wk => EFF[key][wk])
       .filter(e => e.diff != null && e.nYes >= MIN_SAMPLES)
       .map(e => e.diff);
     return vals.length ? vals.reduce((a,b) => a+b, 0) / vals.length : -99;

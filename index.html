@@ -4135,20 +4135,18 @@ function toggleAnalysisOffOnly() {
   renderAnalysis();
 }
 
-let _fwtsRenderTimer = null;
 function saveFactorWindowWeight(fk, wk, val, inputEl) {
   const fwts = DB.getObj('analysisFwts', {});
   if (!fwts[fk]) fwts[fk] = {D0:1, D1:1, D23:1, D7:1};
   fwts[fk][wk] = Math.max(0, parseFloat(val) || 0);
   DB.setObj('analysisFwts', fwts);
-  // 입력 필드에 저장 확인 피드백 (테두리 색 잠깐 변경)
+  // 저장 확인 피드백 (테두리 색 잠깐 변경), renderAnalysis 호출 안 함
+  // → 재정렬로 행이 바뀌면서 값이 1로 돌아가 보이는 버그 방지
+  // 정렬 반영은 페이지 재진입 시 자동 적용
   if (inputEl) {
     inputEl.style.borderColor = 'var(--accent)';
-    setTimeout(() => { if (inputEl) inputEl.style.borderColor = 'var(--border)'; }, 600);
+    setTimeout(() => { try { inputEl.style.borderColor = 'var(--border)'; } catch {} }, 700);
   }
-  // 정렬 갱신은 디바운스 (재정렬로 인한 행 이동 방지 위해 1.5초 지연)
-  clearTimeout(_fwtsRenderTimer);
-  _fwtsRenderTimer = setTimeout(() => renderAnalysis(), 1500);
 }
 
 function renderAnalysis() {

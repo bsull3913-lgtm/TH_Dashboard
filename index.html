@@ -4259,10 +4259,13 @@ function renderAnalysis() {
   // 효과 크기 기준으로 정렬 (절대값 최대 효과 내림차순)
   const MIN_SAMPLES = 3;
   const posScore = key => {
-    const vals = ['D0','D1','D23'].map(wk => EFF[key][wk])
-      .filter(e => e.diff != null && e.nYes >= MIN_SAMPLES)
-      .map(e => e.diff);
-    return vals.length ? vals.reduce((a,b) => a+b, 0) / vals.length : -99;
+    let vsum = 0, wsum = 0;
+    WINDOWS.forEach(w => {
+      const wt = wts[w.key] || 0;
+      const e = EFF[key][w.key];
+      if (wt > 0 && e.diff != null && e.nYes >= MIN_SAMPLES) { vsum += wt * e.diff; wsum += wt; }
+    });
+    return wsum > 0 ? vsum / wsum : -99;
   };
   FACTORS.sort((a, b) => posScore(b.key) - posScore(a.key));
 
@@ -4310,6 +4313,17 @@ function renderAnalysis() {
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
       <div class="card-title" style="margin-bottom:0">📊 시간창별 요인 분석</div>
       <div style="font-size:11px;color:var(--text-muted)" id="analysisUpdateTime"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 10px;background:var(--surface2);border-radius:8px;margin-bottom:10px">
+      <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;flex-shrink:0">정렬 가중치</span>
+      ${WINDOWS.map(w => `
+        <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-muted);white-space:nowrap">
+          <span>${w.label}</span>
+          <input type="number" min="0" max="9" step="1" value="${wts[w.key]??0}"
+            style="width:38px;text-align:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 4px;font-size:12px;color:var(--text)"
+            onchange="saveAnalysisWeight('${w.key}', this.value)">
+        </label>
+      `).join('<span style="color:var(--border)">|</span>')}
     </div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:8px 10px;background:var(--surface2);border-radius:8px">
       <div style="font-size:12px;color:var(--text-muted);white-space:nowrap">데이터 ${nConds}일${filterLabel}</div>

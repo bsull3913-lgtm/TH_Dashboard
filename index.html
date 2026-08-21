@@ -4141,9 +4141,16 @@ function saveAnalysisWeight(wk, val) {
   DB.setObj('analysisWeights', wts);
   renderAnalysis();
 }
+function saveFactorWeight(fk, val) {
+  const fwts = DB.getObj('analysisFwts', {});
+  fwts[fk] = Math.max(0, parseFloat(val) || 0);
+  DB.setObj('analysisFwts', fwts);
+  renderAnalysis();
+}
 
 function renderAnalysis() {
-  const wts = DB.getObj('analysisWeights', {D0:1, D1:1, D23:1, D7:0});
+  const wts  = DB.getObj('analysisWeights', {D0:1, D1:1, D23:1, D7:0});
+  const fwts = DB.getObj('analysisFwts', {});
   const allConds = DB.get('conditions').sort((a,b) => a.date.localeCompare(b.date));
   const conds = analysisOffOnly ? allConds.filter(c => c.workType === '오프') : allConds;
   // 필터 버튼 상태 동기화
@@ -4265,7 +4272,9 @@ function renderAnalysis() {
       const e = EFF[key][w.key];
       if (wt > 0 && e.diff != null && e.nYes >= MIN_SAMPLES) { vsum += wt * e.diff; wsum += wt; }
     });
-    return wsum > 0 ? vsum / wsum : -99;
+    const base = wsum > 0 ? vsum / wsum : -99;
+    const fw = fwts[key] !== undefined ? fwts[key] : 1;
+    return base * fw;
   };
   FACTORS.sort((a, b) => posScore(b.key) - posScore(a.key));
 
@@ -4350,6 +4359,7 @@ function renderAnalysis() {
                 <div style="font-size:9px;margin-top:2px;opacity:0.6;font-weight:400">${w.tip}</div>
               </th>`).join('')}
             <th style="padding:8px 10px;text-align:center;color:var(--text-muted);font-weight:500;width:60px">추세</th>
+            <th style="padding:8px 10px;text-align:center;color:var(--text-muted);font-weight:500;width:52px" title="요인 가중치 (정렬에 반영)">가중치</th>
           </tr>
         </thead>
         <tbody>

@@ -406,10 +406,15 @@ async function go(val) {
       entry.fasted = (val === '했음');
       nextStep(); break;
 
-    case 'EYE':
-      if (val === '__SKIP__') { nextStep(); break; }
-      entry.eyePain = (val !== '없었음');
-      entry.eyeDrop = val.includes('안약 O');
+    case 'EYE_PAIN':
+      if (val === '__SKIP__') { entry.eyePain = false; entry.eyeDrop = false; nextStep(); break; }
+      entry.eyePain = (val === '있었음');
+      if (entry.eyePain) { askEyeDrop(); } else { entry.eyeDrop = false; nextStep(); }
+      break;
+
+    case 'EYE_DROP':
+      if (val === '__SKIP__') { entry.eyeDrop = false; nextStep(); break; }
+      entry.eyeDrop = (val === 'O');
       nextStep(); break;
 
     case 'SUPP':

@@ -4375,7 +4375,7 @@ function renderAnalysis() {
                     return `<input type="number" min="0" max="9" step="1" value="${fw[w.key]??1}"
                       title="${w.label}"
                       style="width:30px;text-align:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 2px;font-size:11px;color:var(--text)"
-                      oninput="saveFactorWindowWeight('${f.key}','${w.key}',this.value)">`;
+                      oninput="saveFactorWindowWeight('${f.key}','${w.key}',this.value,this)">`;
                   }).join('')}
                 </div>
               </td>

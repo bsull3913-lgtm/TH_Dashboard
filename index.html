@@ -2485,9 +2485,18 @@ function importSleepCSVFile(file) {
   reader.readAsText(file, 'UTF-8');
 }
 
+function handleGarminDrop(event) {
+  event.preventDefault();
+  event.currentTarget.classList.remove('drag-over');
+  const file = event.dataTransfer.files[0];
+  if (file) importGarminCSVFile(file);
+}
 function importGarminCSV(event) {
   const file = event.target.files[0];
-  if (!file) return;
+  if (file) importGarminCSVFile(file);
+  event.target.value = '';
+}
+function importGarminCSVFile(file) {
   const reader = new FileReader();
   reader.onload = e => {
     const lines = e.target.result.split('\n');
@@ -2508,11 +2517,11 @@ function importGarminCSV(event) {
       const date = `${dateMatch[1]}-${dateMatch[2].padStart(2,'0')}-${dateMatch[3].padStart(2,'0')}`;
       const dist = parseFloat(cols[distIdx].replace(/[^0-9.]/g,''));
       if (!dist) continue;
-      if (runs.find(r => r.date === date)) continue; // skip duplicate
+      if (runs.find(r => r.date === date)) continue;
       runs.push({
         id: Date.now() + i,
         date,
-        dist: dist > 50 ? (dist/1000).toFixed(2) : dist, // handle meters
+        dist: dist > 50 ? (dist/1000).toFixed(2) : dist,
         time: timeIdx >= 0 ? cols[timeIdx] : '',
         hr: hrIdx >= 0 ? cols[hrIdx] : '',
         memo: 'Garmin'
@@ -2520,8 +2529,70 @@ function importGarminCSV(event) {
       count++;
     }
     DB.set('runs', runs);
-    alert(`${count}개의 러닝 기록을 가져왔어요!`);
+    const el = document.getElementById('garminImportResult');
+    if (el) el.textContent = `✓ ${count}개 러닝 기록 가져옴`;
     renderRunning();
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function handleInbodyDrop(event) {
+  event.preventDefault();
+  event.currentTarget.classList.remove('drag-over');
+  const file = event.dataTransfer.files[0];
+  if (file) importInbodyCSVFile(file);
+}
+function importInbodyCSV(event) {
+  const file = event.target.files[0];
+  if (file) importInbodyCSVFile(file);
+  event.target.value = '';
+}
+function importInbodyCSVFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const text = e.target.result;
+    // BOM 제거
+    const clean = text.replace(/^﻿/, '');
+    const lines = clean.split('\n').filter(l => l.trim());
+    if (lines.length < 2) { alert('CSV 파일을 읽을 수 없어요'); return; }
+    const header = lines[0].split(',').map(h => h.trim().replace(/"/g,'').toLowerCase());
+    const find = (...kws) => header.findIndex(h => kws.some(k => h.includes(k)));
+    const dateIdx   = find('date','날짜','측정일');
+    const weightIdx = find('weight','체중');
+    const fatPctIdx = find('fat%','체지방률','body fat percentage','fat percentage','fat%');
+    const fatMassIdx= find('fat mass','체지방량','body fat mass');
+    const muscleIdx = find('skeletal muscle','골격근','smm','lbm');
+    const bmiIdx    = find('bmi');
+    const bmrIdx    = find('bmr','기초대사량','basal');
+    if (dateIdx < 0 || weightIdx < 0) {
+      alert('날짜/체중 열을 찾을 수 없어요.\nCSV 형식을 확인하세요.');
+      return;
+    }
+    const data = DB.get('inbody');
+    let count = 0;
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(',').map(c => c.trim().replace(/"/g,''));
+      if (cols.length < 2) continue;
+      const rawDate = cols[dateIdx];
+      const dm = rawDate.match(/(\d{4})[.\-\/](\d{1,2})[.\-\/](\d{1,2})/);
+      if (!dm) continue;
+      const date = `${dm[1]}-${dm[2].padStart(2,'0')}-${dm[3].padStart(2,'0')}`;
+      const weight = parseFloat(cols[weightIdx]);
+      if (!weight) continue;
+      // 체지방률: fat% 열 우선, 없으면 fat mass / weight * 100
+      let fat = fatPctIdx >= 0 ? parseFloat(cols[fatPctIdx]) : null;
+      if (!fat && fatMassIdx >= 0 && weight) fat = parseFloat((parseFloat(cols[fatMassIdx]) / weight * 100).toFixed(1));
+      const muscle = muscleIdx >= 0 ? parseFloat(cols[muscleIdx]) : null;
+      const bmi    = bmiIdx >= 0 ? parseFloat(cols[bmiIdx]) : null;
+      const bmr    = bmrIdx >= 0 ? parseFloat(cols[bmrIdx]) : null;
+      if (data.find(r => r.date === date)) continue; // 중복 건너뜀
+      data.push({ id: Date.now() + i, date, weight, fat: fat||'', muscle: muscle||'', bmi: bmi||'', bmr: bmr||'' });
+      count++;
+    }
+    DB.set('inbody', data);
+    const el = document.getElementById('inbodyImportResult');
+    if (el) el.textContent = `✓ ${count}개 인바디 기록 가져옴`;
+    renderInbody();
   };
   reader.readAsText(file, 'UTF-8');
 }

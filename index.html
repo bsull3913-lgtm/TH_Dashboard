@@ -4135,12 +4135,15 @@ function toggleAnalysisOffOnly() {
   renderAnalysis();
 }
 
+let _fwtsRenderTimer = null;
 function saveFactorWindowWeight(fk, wk, val) {
   const fwts = DB.getObj('analysisFwts', {});
   if (!fwts[fk]) fwts[fk] = {D0:1, D1:1, D23:1, D7:1};
   fwts[fk][wk] = Math.max(0, parseFloat(val) || 0);
   DB.setObj('analysisFwts', fwts);
-  renderAnalysis();
+  // 디바운스: 입력 중 DOM 파괴 방지 (800ms 후 정렬 반영)
+  clearTimeout(_fwtsRenderTimer);
+  _fwtsRenderTimer = setTimeout(() => renderAnalysis(), 800);
 }
 
 function renderAnalysis() {
@@ -4367,7 +4370,7 @@ function renderAnalysis() {
                     return `<input type="number" min="0" max="9" step="1" value="${fw[w.key]??1}"
                       title="${w.label}"
                       style="width:30px;text-align:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 2px;font-size:11px;color:var(--text)"
-                      onchange="saveFactorWindowWeight('${f.key}','${w.key}',this.value)">`;
+                      oninput="saveFactorWindowWeight('${f.key}','${w.key}',this.value)">`;
                   }).join('')}
                 </div>
               </td>

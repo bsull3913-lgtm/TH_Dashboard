@@ -4135,21 +4135,15 @@ function toggleAnalysisOffOnly() {
   renderAnalysis();
 }
 
-function saveAnalysisWeight(wk, val) {
-  const wts = DB.getObj('analysisWeights', {D0:1, D1:1, D23:1, D7:0});
-  wts[wk] = Math.max(0, parseFloat(val) || 0);
-  DB.setObj('analysisWeights', wts);
-  renderAnalysis();
-}
-function saveFactorWeight(fk, val) {
+function saveFactorWindowWeight(fk, wk, val) {
   const fwts = DB.getObj('analysisFwts', {});
-  fwts[fk] = Math.max(0, parseFloat(val) || 0);
+  if (!fwts[fk]) fwts[fk] = {D0:1, D1:1, D23:1, D7:1};
+  fwts[fk][wk] = Math.max(0, parseFloat(val) || 0);
   DB.setObj('analysisFwts', fwts);
   renderAnalysis();
 }
 
 function renderAnalysis() {
-  const wts  = DB.getObj('analysisWeights', {D0:1, D1:1, D23:1, D7:0});
   const fwts = DB.getObj('analysisFwts', {});
   const allConds = DB.get('conditions').sort((a,b) => a.date.localeCompare(b.date));
   const conds = analysisOffOnly ? allConds.filter(c => c.workType === '오프') : allConds;

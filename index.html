@@ -4260,15 +4260,14 @@ function renderAnalysis() {
   // 효과 크기 기준으로 정렬 (절대값 최대 효과 내림차순)
   const MIN_SAMPLES = 3;
   const posScore = key => {
+    const fw = fwts[key] || {D0:1, D1:1, D23:1, D7:1};
     let vsum = 0, wsum = 0;
     WINDOWS.forEach(w => {
-      const wt = wts[w.key] || 0;
+      const wt = fw[w.key] ?? 1;
       const e = EFF[key][w.key];
       if (wt > 0 && e.diff != null && e.nYes >= MIN_SAMPLES) { vsum += wt * e.diff; wsum += wt; }
     });
-    const base = wsum > 0 ? vsum / wsum : -99;
-    const fw = fwts[key] !== undefined ? fwts[key] : 1;
-    return base * fw;
+    return wsum > 0 ? vsum / wsum : -99;
   };
   FACTORS.sort((a, b) => posScore(b.key) - posScore(a.key));
 
@@ -4317,17 +4316,6 @@ function renderAnalysis() {
       <div class="card-title" style="margin-bottom:0">📊 시간창별 요인 분석</div>
       <div style="font-size:11px;color:var(--text-muted)" id="analysisUpdateTime"></div>
     </div>
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 10px;background:var(--surface2);border-radius:8px;margin-bottom:10px">
-      <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;flex-shrink:0">정렬 가중치</span>
-      ${WINDOWS.map(w => `
-        <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-muted);white-space:nowrap">
-          <span>${w.label}</span>
-          <input type="number" min="0" max="9" step="1" value="${wts[w.key]??0}"
-            style="width:38px;text-align:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 4px;font-size:12px;color:var(--text)"
-            onchange="saveAnalysisWeight('${w.key}', this.value)">
-        </label>
-      `).join('<span style="color:var(--border)">|</span>')}
-    </div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:8px 10px;background:var(--surface2);border-radius:8px">
       <div style="font-size:12px;color:var(--text-muted);white-space:nowrap">데이터 ${nConds}일${filterLabel}</div>
       <div style="flex:1;background:var(--bg);border-radius:4px;height:6px;overflow:hidden">
@@ -4353,7 +4341,7 @@ function renderAnalysis() {
                 <div style="font-size:9px;margin-top:2px;opacity:0.6;font-weight:400">${w.tip}</div>
               </th>`).join('')}
             <th style="padding:8px 10px;text-align:center;color:var(--text-muted);font-weight:500;width:60px">추세</th>
-            <th style="padding:8px 10px;text-align:center;color:var(--text-muted);font-weight:500;width:52px" title="요인 가중치 (정렬에 반영)">가중치</th>
+            <th style="padding:8px 10px;text-align:center;color:var(--text-muted);font-weight:500;min-width:140px" title="시간창별 가중치 (정렬에 반영)">가중치<div style="font-size:9px;font-weight:400;opacity:0.7">당일·D-1·D2~3·D7</div></th>
           </tr>
         </thead>
         <tbody>
@@ -4372,10 +4360,16 @@ function renderAnalysis() {
                 return cellHtml(e, isBest);
               }).join('')}
               <td style="padding:8px 10px;text-align:center">${miniBar(f.key)}</td>
-              <td style="padding:8px 10px;text-align:center">
-                <input type="number" min="0" max="9" step="1" value="${fwts[f.key]??1}"
-                  style="width:40px;text-align:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 4px;font-size:12px;color:var(--text)"
-                  onchange="saveFactorWeight('${f.key}', this.value)">
+              <td style="padding:8px 6px;text-align:center">
+                <div style="display:flex;gap:3px;justify-content:center">
+                  ${WINDOWS.map(w => {
+                    const fw = fwts[f.key] || {D0:1,D1:1,D23:1,D7:1};
+                    return `<input type="number" min="0" max="9" step="1" value="${fw[w.key]??1}"
+                      title="${w.label}"
+                      style="width:30px;text-align:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 2px;font-size:11px;color:var(--text)"
+                      onchange="saveFactorWindowWeight('${f.key}','${w.key}',this.value)">`;
+                  }).join('')}
+                </div>
               </td>
             </tr>`;
           }).join('')}

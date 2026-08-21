@@ -2574,9 +2574,12 @@ function importInbodyCSVFile(file) {
       const cols = lines[i].split(',').map(c => c.trim().replace(/"/g,''));
       if (cols.length < 2) continue;
       const rawDate = cols[dateIdx];
-      const dm = rawDate.match(/(\d{4})[.\-\/](\d{1,2})[.\-\/](\d{1,2})/);
-      if (!dm) continue;
-      const date = `${dm[1]}-${dm[2].padStart(2,'0')}-${dm[3].padStart(2,'0')}`;
+      let date;
+      const ts = rawDate.match(/^(\d{4})(\d{2})(\d{2})\d*$/); // YYYYMMDDHHmmss
+      const sep = rawDate.match(/(\d{4})[.\-\/](\d{1,2})[.\-\/](\d{1,2})/);
+      if (ts)  date = `${ts[1]}-${ts[2]}-${ts[3]}`;
+      else if (sep) date = `${sep[1]}-${sep[2].padStart(2,'0')}-${sep[3].padStart(2,'0')}`;
+      else continue;
       const weight = parseFloat(cols[weightIdx]);
       if (!weight) continue;
       // 체지방률: fat% 열 우선, 없으면 fat mass / weight * 100

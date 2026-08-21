@@ -504,8 +504,13 @@ function askFast() {
 }
 function askEye() {
   bot('눈 통증 있었어?');
-  setQR(['없었음','있었음 (안약 O)','있었음 (안약 X)'], false, true);
-  step = 'EYE';
+  setQR(['없었음','있었음'], false, true);
+  step = 'EYE_PAIN';
+}
+function askEyeDrop() {
+  bot('안약 했어?');
+  setQR(['O','X'], false, true);
+  step = 'EYE_DROP';
 }
 function askSupp() {
   selectedSupps = new Set();

@@ -2125,18 +2125,17 @@ function loadRunnerGoal() {
   });
   return g;
 }
-// 심박 → 존 변환 (사용자 정의 존 경계 우선, 없으면 maxHR% 기반)
+// 심박 → 존 변환 (Garmin 절대값 기준, 미입력 시 기본값 121/142/162/183 사용)
+const DEFAULT_ZONE_MAX = [121, 142, 162, 183];
 function getZoneFromHR(hr, maxHR, zoneMax) {
-  if (zoneMax && zoneMax.some(v => v > 0)) {
-    const zm = zoneMax.map((v,i) => v || [121,142,162,183][i]);
-    if (hr <= zm[0]) return 1;
-    if (hr <= zm[1]) return 2;
-    if (hr <= zm[2]) return 3;
-    if (hr <= zm[3]) return 4;
-    return 5;
-  }
-  const p = (hr / maxHR) * 100;
-  return p < 60 ? 1 : p < 70 ? 2 : p < 80 ? 3 : p < 90 ? 4 : 5;
+  const zm = (zoneMax && zoneMax.length)
+    ? zoneMax.map((v, i) => (v > 0 ? v : DEFAULT_ZONE_MAX[i]))
+    : DEFAULT_ZONE_MAX;
+  if (hr <= zm[0]) return 1;
+  if (hr <= zm[1]) return 2;
+  if (hr <= zm[2]) return 3;
+  if (hr <= zm[3]) return 4;
+  return 5;
 }
 
 function generateCoachAdvice(runs, goal, maxHR, zoneMax) {

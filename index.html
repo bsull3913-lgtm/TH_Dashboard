@@ -2139,7 +2139,7 @@ function getZoneFromHR(hr, maxHR, zoneMax) {
   return p < 60 ? 1 : p < 70 ? 2 : p < 80 ? 3 : p < 90 ? 4 : 5;
 }
 
-function generateCoachAdvice(runs, goal, maxHR) {
+function generateCoachAdvice(runs, goal, maxHR, zoneMax) {
   const now = new Date();
   const daysSince = d => (now - new Date(d+'T00:00:00')) / 86400000;
   const last4w = runs.filter(r => daysSince(r.date) <= 28);

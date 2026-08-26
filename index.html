@@ -2261,7 +2261,7 @@ function renderRunning() {
   document.getElementById('goalSummary').innerHTML = summHTML;
 
   // ── 코치 어드바이스
-  const advice = generateCoachAdvice(runs, goal, maxHR);
+  const advice = generateCoachAdvice(runs, goal, maxHR, zoneMax);
   document.getElementById('coachAdvice').innerHTML = advice.map(a =>
     `<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border-radius:8px;background:var(--surface2);font-size:12px;line-height:1.6">
       <span style="font-size:16px;flex-shrink:0">${a.icon}</span>

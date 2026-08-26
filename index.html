@@ -2346,7 +2346,7 @@ function renderRunning() {
     const tgtM = tgtPS ? tgtPS/60 : null;
     const datasets = [
       {label:'페이스(분/km)',data:paceM,borderColor:'#7c6af7',backgroundColor:'rgba(124,106,247,0.07)',fill:true,tension:0.3,
-        pointRadius:4,pointBackgroundColor:paceRuns.map(r=>{const z=getRunZone(r,maxHR);return z?ZONE_DEF[z].color:'#7c6af7';})},
+        pointRadius:4,pointBackgroundColor:paceRuns.map(r=>{const z=getRunZone(r,maxHR,zoneMax);return z?ZONE_DEF[z].color:'#7c6af7';})},
       {label:'3회 이동평균',data:ma,borderColor:'#5ed8a4',borderDash:[4,3],borderWidth:2,pointRadius:0,tension:0.4,fill:false},
     ];
     if (tgtM) datasets.push({label:'목표 페이스',data:paceRuns.map(()=>tgtM),borderColor:'#ffd700',borderDash:[6,4],borderWidth:1.5,pointRadius:0,fill:false});
@@ -2367,7 +2367,7 @@ function renderRunning() {
     data:{labels:dist15.map(r=>fmtDate(r.date)),datasets:[{data:dist15.map(r=>r.dist),
       backgroundColor:dist15.map(r=>{
         if(r.runType&&RUN_TYPE_DEF[r.runType]) return RUN_TYPE_DEF[r.runType].color+'bb';
-        const z=getRunZone(r,maxHR); return z?ZONE_DEF[z].color+'bb':'rgba(124,106,247,0.7)';
+        const z=getRunZone(r,maxHR,zoneMax); return z?ZONE_DEF[z].color+'bb':'rgba(124,106,247,0.7)';
       }),borderRadius:6}]},
     options:{...chartOpts(0),plugins:{legend:{display:false}}}
   });
@@ -2377,7 +2377,7 @@ function renderRunning() {
   if(!runs.length){tbody.innerHTML='';empty.style.display='block';return;}
   empty.style.display='none';
   tbody.innerHTML=runs.map(r=>{
-    const z=getRunZone(r,maxHR);
+    const z=getRunZone(r,maxHR,zoneMax);
     return `<tr>
       <td>${fmtDateLong(r.date)}</td>
       <td>${runTypeBadge(r.runType)}</td>

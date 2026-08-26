@@ -766,6 +766,17 @@
           <input type="number" id="maxHRInput" placeholder="190" min="140" max="220" oninput="saveRunnerGoal()">
         </div>
       </div>
+      <div style="margin-top:10px">
+        <div style="font-size:11px;color:var(--text-muted);font-weight:600;margin-bottom:6px">심박존 상한 (Garmin 기준으로 입력)</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${[1,2,3,4].map(z => `
+          <div class="form-group" style="flex:0;min-width:70px">
+            <label style="color:${['#8892b0','#5ed8a4','#f7c26a','#f7a26a'][z-1]}">Z${z} 상한</label>
+            <input type="number" id="zoneMax${z}" placeholder="${[121,142,162,183][z-1]}" min="100" max="220" oninput="saveRunnerGoal()">
+          </div>`).join('')}
+        </div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:2px">예) Z1:121 Z2:142 Z3:162 Z4:183 → 가민 앱 '심박존' 화면에서 확인</div>
+      </div>
       <div id="goalSummary"></div>
     </div>
     <div class="card">
@@ -2088,7 +2099,9 @@ function saveRunnerGoal() {
   g.time  = document.getElementById('goalTime').value;
   g.date  = document.getElementById('goalDate').value;
   g.maxHR = parseInt(document.getElementById('maxHRInput').value) || 190;
+  g.zoneMax = [1,2,3,4].map(z => parseInt(document.getElementById('zoneMax'+z).value) || 0);
   DB.setObj('runnerGoal', g);
+  scheduleSync();
   renderRunning();
 }
 function loadRunnerGoal() {
@@ -2098,7 +2111,26 @@ function loadRunnerGoal() {
   if (g.time)  document.getElementById('goalTime').value  = g.time;
   if (g.date)  document.getElementById('goalDate').value  = g.date;
   if (g.maxHR) document.getElementById('maxHRInput').value = g.maxHR;
+  const defaults = [121, 142, 162, 183];
+  [1,2,3,4].forEach((z,i) => {
+    const v = g.zoneMax ? g.zoneMax[i] : 0;
+    if (v) document.getElementById('zoneMax'+z).value = v;
+    else document.getElementById('zoneMax'+z).placeholder = defaults[i];
+  });
   return g;
+}
+// 심박 → 존 변환 (사용자 정의 존 경계 우선, 없으면 maxHR% 기반)
+function getZoneFromHR(hr, maxHR, zoneMax) {
+  if (zoneMax && zoneMax.some(v => v > 0)) {
+    const zm = zoneMax.map((v,i) => v || [121,142,162,183][i]);
+    if (hr <= zm[0]) return 1;
+    if (hr <= zm[1]) return 2;
+    if (hr <= zm[2]) return 3;
+    if (hr <= zm[3]) return 4;
+    return 5;
+  }
+  const p = (hr / maxHR) * 100;
+  return p < 60 ? 1 : p < 70 ? 2 : p < 80 ? 3 : p < 90 ? 4 : 5;
 }
 
 function generateCoachAdvice(runs, goal, maxHR) {

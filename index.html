@@ -4140,6 +4140,7 @@ function saveFactorWindowWeight(fk, wk, val, inputEl) {
   if (!fwts[fk]) fwts[fk] = {D0:1, D1:1, D23:1, D7:1};
   fwts[fk][wk] = Math.max(0, parseFloat(val) || 0);
   DB.setObj('analysisFwts', fwts);
+  scheduleSync(); // Gist에도 백업
   // 저장 확인 피드백 (테두리 색 잠깐 변경), renderAnalysis 호출 안 함
   // → 재정렬로 행이 바뀌면서 값이 1로 돌아가 보이는 버그 방지
   // 정렬 반영은 페이지 재진입 시 자동 적용
@@ -5036,7 +5037,7 @@ window.addEventListener('load', () => {
 // ═══════════════════════════════════
 // GITHUB GIST SYNC
 // ═══════════════════════════════════
-const SYNC_KEYS = ['conditions','runs','fastings','eyes','skins','sleeps','suppRecords','suppTypes','inbody','runnerGoal','habits','skinPackTypes','skinEveningTypes','workTypes','exerciseTypes'];
+const SYNC_KEYS = ['conditions','runs','fastings','eyes','skins','sleeps','suppRecords','suppTypes','inbody','runnerGoal','habits','skinPackTypes','skinEveningTypes','workTypes','exerciseTypes','analysisFwts'];
 
 const GistSync = {
   get token()  { return localStorage.getItem('gist_token')  || ''; },

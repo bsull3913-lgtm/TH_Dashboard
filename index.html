@@ -2138,7 +2138,7 @@ function generateCoachAdvice(runs, goal, maxHR) {
 
   // Zone distribution
   const zc = {1:0,2:0,3:0,4:0,5:0}; let zt = 0;
-  last4w.forEach(r => { const z=getRunZone(r,maxHR); if(z){zc[z]++;zt++;} });
+  last4w.forEach(r => { const z=getRunZone(r,maxHR,zoneMax); if(z){zc[z]++;zt++;} });
   const easyPct  = zt ? (zc[1]+zc[2])/zt*100 : -1;
   const hardPct  = zt ? (zc[4]+zc[5])/zt*100 : 0;
   const grayPct  = zt ? zc[3]/zt*100 : 0;
@@ -2230,6 +2230,7 @@ function renderRunning() {
   // ── 목표 로드
   const goal = loadRunnerGoal();
   const maxHR = goal.maxHR || 190;
+  const zoneMax = goal.zoneMax || [];
   const DIST  = { half:21.0975, full:42.195 };
   const raceKm = DIST[goal.race] || DIST.half;
   const raceLabel = goal.race === 'full' ? '풀마라톤' : '하프마라톤';
@@ -2260,7 +2261,7 @@ function renderRunning() {
   // ── 존 분포 (최근 4주)
   const last4w = runs.filter(r=>(now-new Date(r.date+'T00:00:00'))/86400000<=28);
   const zc={1:0,2:0,3:0,4:0,5:0}; let zt=0;
-  last4w.forEach(r=>{const z=getRunZone(r,maxHR);if(z){zc[z]++;zt++;}});
+  last4w.forEach(r=>{const z=getRunZone(r,maxHR,zoneMax);if(z){zc[z]++;zt++;}});
   document.getElementById('zoneLegend').innerHTML = Object.entries(ZONE_DEF).map(([z,d])=>
     `<div style="display:flex;align-items:center;gap:5px;font-size:11px">
       <div style="width:10px;height:10px;border-radius:50%;background:${d.color};flex-shrink:0"></div>

@@ -769,11 +769,22 @@
       <div style="margin-top:10px">
         <div style="font-size:11px;color:var(--text-muted);font-weight:600;margin-bottom:6px">심박존 상한 (Garmin 기준으로 입력)</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          ${[1,2,3,4].map(z => `
           <div class="form-group" style="flex:0;min-width:70px">
-            <label style="color:${['#8892b0','#5ed8a4','#f7c26a','#f7a26a'][z-1]}">Z${z} 상한</label>
-            <input type="number" id="zoneMax${z}" placeholder="${[121,142,162,183][z-1]}" min="100" max="220" oninput="saveRunnerGoal()">
-          </div>`).join('')}
+            <label style="color:#8892b0">Z1 상한</label>
+            <input type="number" id="zoneMax1" placeholder="121" min="100" max="220" oninput="saveRunnerGoal()">
+          </div>
+          <div class="form-group" style="flex:0;min-width:70px">
+            <label style="color:#5ed8a4">Z2 상한</label>
+            <input type="number" id="zoneMax2" placeholder="142" min="100" max="220" oninput="saveRunnerGoal()">
+          </div>
+          <div class="form-group" style="flex:0;min-width:70px">
+            <label style="color:#f7c26a">Z3 상한</label>
+            <input type="number" id="zoneMax3" placeholder="162" min="100" max="220" oninput="saveRunnerGoal()">
+          </div>
+          <div class="form-group" style="flex:0;min-width:70px">
+            <label style="color:#f7a26a">Z4 상한</label>
+            <input type="number" id="zoneMax4" placeholder="183" min="100" max="220" oninput="saveRunnerGoal()">
+          </div>
         </div>
         <div style="font-size:10px;color:var(--text-muted);margin-top:2px">예) Z1:121 Z2:142 Z3:162 Z4:183 → 가민 앱 '심박존' 화면에서 확인</div>
       </div>

@@ -2051,8 +2051,9 @@ function getZoneFromHR(hr, maxHR) {
   return p < 60 ? 1 : p < 70 ? 2 : p < 80 ? 3 : p < 90 ? 4 : 5;
 }
 function getRunZone(r, maxHR) {
-  if (r.hr && maxHR) return getZoneFromHR(parseInt(r.hr), maxHR);
+  // runType 명시된 경우 우선 (ATE 기반 Garmin 분류 포함)
   if (r.runType && RUN_TYPE_DEF[r.runType]) return RUN_TYPE_DEF[r.runType].zone;
+  if (r.hr && maxHR) return getZoneFromHR(parseInt(r.hr), maxHR);
   return null;
 }
 function zoneBadge(z) {
@@ -2509,7 +2510,8 @@ function importGarminCSVFile(file) {
       const dateIdx = header.findIndex(h => h.includes('date') || h.includes('날짜'));
       const distIdx = header.findIndex(h => h.includes('distance') || h.includes('거리'));
       const timeIdx = header.findIndex(h => h.includes('time') || h.includes('시간'));
-      const hrIdx = header.findIndex(h => h.includes('heart') || h.includes('심박'));
+      const hrIdx   = header.findIndex(h => h.includes('평균 심박') || h.includes('avg hr') || h.includes('average heart'));
+      const ateIdx  = header.findIndex(h => h.includes('유산소 훈련') || h.includes('aerobic te') || h.includes('aerobic training'));
       if (dateIdx < 0 || distIdx < 0) continue;
       const rawDate = cols[dateIdx];
       const dateMatch = rawDate.match(/(\d{4})[.\-\/](\d{1,2})[.\-\/](\d{1,2})/);
@@ -2518,12 +2520,25 @@ function importGarminCSVFile(file) {
       const dist = parseFloat(cols[distIdx].replace(/[^0-9.]/g,''));
       if (!dist) continue;
       if (runs.find(r => r.date === date)) continue;
+      // ATE(유산소 훈련 효과)로 runType 자동 분류
+      let runType = null;
+      if (ateIdx >= 0) {
+        const ate = parseFloat(cols[ateIdx]);
+        if (!isNaN(ate)) {
+          if      (ate < 2.0) runType = 'recovery';
+          else if (ate < 3.0) runType = 'easy';     // Zone 2
+          else if (ate < 4.0) runType = 'moderate'; // Zone 3
+          else if (ate < 4.5) runType = 'tempo';    // Zone 4
+          else                runType = 'interval'; // Zone 5
+        }
+      }
       runs.push({
         id: Date.now() + i,
         date,
         dist: dist > 50 ? (dist/1000).toFixed(2) : dist,
         time: timeIdx >= 0 ? cols[timeIdx] : '',
         hr: hrIdx >= 0 ? cols[hrIdx] : '',
+        runType,
         memo: 'Garmin'
       });
       count++;

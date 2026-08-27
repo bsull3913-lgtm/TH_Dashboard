@@ -236,7 +236,7 @@ function newEntry(d) {
     score: null, workType: null,
     mBig: false, mSmall: false, alcohol: false,
     fasted: false,
-    eyePain: false, eyeDrop: false,
+    eyePain: false, eyeDrop: false, eyePainLevel: 0,
     supps: [],
     mask: false, maskType: '', eveningCare: [], skinStatus: '',
     exercises: []
@@ -407,10 +407,15 @@ async function go(val) {
       nextStep(); break;
 
     case 'EYE_PAIN':
-      if (val === '__SKIP__') { entry.eyePain = false; entry.eyeDrop = false; nextStep(); break; }
+      if (val === '__SKIP__') { entry.eyePain = false; entry.eyeDrop = false; entry.eyePainLevel = 0; nextStep(); break; }
       entry.eyePain = (val === '있었음');
-      if (entry.eyePain) { askEyeDrop(); } else { entry.eyeDrop = false; nextStep(); }
+      if (entry.eyePain) { askEyePainLevel(); } else { entry.eyeDrop = false; entry.eyePainLevel = 0; nextStep(); }
       break;
+
+    case 'EYE_PAIN_LEVEL':
+      if (val === '__SKIP__') { entry.eyePainLevel = 1; askEyeDrop(); break; }
+      entry.eyePainLevel = parseInt(val) || 1;
+      askEyeDrop(); break;
 
     case 'EYE_DROP':
       if (val === '__SKIP__') { entry.eyeDrop = false; nextStep(); break; }
@@ -511,6 +516,11 @@ function askEye() {
   bot('눈 통증 있었어?');
   setQR(['없었음','있었음'], false, true);
   step = 'EYE_PAIN';
+}
+function askEyePainLevel() {
+  bot('통증 강도는? (1=약함 ~ 5=심함)');
+  setQR(['1','2','3','4','5'], false, true);
+  step = 'EYE_PAIN_LEVEL';
 }
 function askEyeDrop() {
   bot('안약 했어?');
@@ -622,7 +632,7 @@ function showConfirm() {
     `💪 컨디션: ${entry.score ?? '-'}점  근무: ${wt}  M/m/술: ${mms}`,
     `🏋️ 운동: ${entry.exercises && entry.exercises.length ? entry.exercises.join(', ') : '없음'}`,
     `🌙 단식: ${entry.fasted ? 'O' : 'X'}`,
-    `👁 눈 통증: ${entry.eyePain ? (entry.eyeDrop?'O(안약O)':'O(안약X)') : 'X'}`,
+    `👁 눈 통증: ${entry.eyePain ? `O(강도${entry.eyePainLevel}) ${entry.eyeDrop?'안약O':'안약X'}` : 'X'}`,
     `💊 영양제: ${entry.supps.length ? entry.supps.join(', ') : '없음'}`,
     `🧴 팩: ${entry.mask ? entry.maskType : 'X'} / 저녁: ${ec} / 피부: ${entry.skinStatus||'-'}`,
   ].join('\n'));
@@ -659,7 +669,7 @@ async function saveEntry() {
   if (entry.eyePain) {
     const eyes = parsed.eyes || [];
     const ei = eyes.findIndex(e => e.date === d);
-    const er = { id:ei>=0?eyes[ei].id:ts+3, date:d, pain:true, drop:entry.eyeDrop, painLevel:0, memo:'' };
+    const er = { id:ei>=0?eyes[ei].id:ts+3, date:d, pain:true, drop:entry.eyeDrop, painLevel:entry.eyePainLevel||1, memo:'' };
     if (ei>=0) eyes[ei]={...eyes[ei],...er}; else eyes.push(er);
     parsed.eyes = eyes;
   }

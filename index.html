@@ -1485,37 +1485,23 @@ const DB = {
 const WX_CACHE = {};
 const WX_MAP = {0:'☀️',1:'🌤',2:'⛅',3:'☁️',45:'🌫',48:'🌫',51:'🌦',53:'🌦',55:'🌧',61:'🌧',63:'🌧',65:'🌧',71:'🌨',73:'🌨',75:'🌨',80:'🌦',81:'🌧',82:'⛈',95:'⛈',96:'⛈',99:'⛈'};
 function wxIcon(code) { return WX_MAP[code] ?? '🌡'; }
-async function ensureWeather(dates) {
-  const missing = (dates||[]).filter(d => d && !WX_CACHE[d]);
-  if (!missing.length) return;
-  missing.sort();
-  const start = missing[0], end = missing[missing.length-1];
-
-  // 최근 92일 → forecast API (lag 없음), 그 이전 → archive API
-  const d92 = new Date(); d92.setDate(d92.getDate() - 91);
-  const d92s = d92.toISOString().slice(0,10);
-
-  async function fetchWx(url) {
+let _wxFetchPromise = null;
+async function ensureWeather() {
+  if (_wxFetchPromise) return _wxFetchPromise;
+  _wxFetchPromise = (async () => {
     try {
+      const url = 'https://api.open-meteo.com/v1/forecast?latitude=37.21&longitude=127.07&past_days=92&daily=precipitation_sum,weathercode&timezone=Asia%2FSeoul';
       const r = await fetch(url); if (!r.ok) return;
       const data = await r.json();
       (data.daily?.time||[]).forEach((d,i) => {
         WX_CACHE[d] = { code: data.daily.weathercode[i], precip: data.daily.precipitation_sum[i]||0 };
       });
     } catch {}
-  }
-
-  const fetches = [];
-  if (end >= d92s) {
-    const s = start >= d92s ? start : d92s;
-    fetches.push(fetchWx(`https://api.open-meteo.com/v1/forecast?latitude=37.21&longitude=127.07&start_date=${s}&end_date=${end}&daily=precipitation_sum,weathercode&timezone=Asia%2FSeoul`));
-  }
-  if (start < d92s) {
-    const e = end < d92s ? end : new Date(d92.getTime()-86400000).toISOString().slice(0,10);
-    fetches.push(fetchWx(`https://archive-api.open-meteo.com/v1/archive?latitude=37.21&longitude=127.07&start_date=${start}&end_date=${e}&daily=precipitation_sum,weathercode&timezone=Asia%2FSeoul`));
-  }
-  await Promise.all(fetches);
+  })();
+  return _wxFetchPromise;
 }
+// 페이지 로드 즉시 백그라운드 fetch 시작
+ensureWeather();
 
 // ═══════════════════════════════════
 // NAVIGATION
@@ -3625,7 +3611,7 @@ function selectCondDate(dateStr) {
   renderCondCal();
 }
 
-async function renderCondition() {
+function renderCondition() {
   document.getElementById('condDate').value = selectedCondDate || today();
   applyExerciseTypeSeed();
   renderCondScoreChips();
@@ -3633,7 +3619,6 @@ async function renderCondition() {
   renderExerciseSelector();
   renderCondCal();
   const data = DB.get('conditions').sort((a,b) => a.date.localeCompare(b.date));
-  await ensureWeather(data.map(c => c.date));
 
   if (condChart) condChart.destroy();
   const ctx = document.getElementById('condPageChart').getContext('2d');
@@ -3643,14 +3628,15 @@ async function renderCondition() {
       labels: data.map(c => fmtDate(c.date)),
       datasets: [
         { label:'강수량', type:'bar', data: data.map(c => WX_CACHE[c.date]?.precip ?? null),
-          backgroundColor:'rgba(96,165,250,0.25)', borderColor:'rgba(96,165,250,0.5)', borderWidth:1, yAxisID:'y2', order:2 },
+          backgroundColor:'rgba(96,165,250,0.3)', borderColor:'rgba(96,165,250,0.5)', borderWidth:1, yAxisID:'y2', order:2 },
         { label:'컨디션', data: data.map(c => c.score), borderColor:'#7c6af7', backgroundColor:'rgba(124,106,247,0.12)',
           fill:true, tension:0.4, pointBackgroundColor: data.map(c => scoreColor(c.score)), pointRadius:5, yAxisID:'y', order:1 }
       ]
     },
     options: {
       responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ labels:{ color:'#71717a', font:{size:10}, boxWidth:12 } } },
+      plugins:{ legend:{ labels:{ color:'#71717a', font:{size:10}, boxWidth:12 } },
+        tooltip:{ callbacks:{ label: ctx => ctx.dataset.label==='강수량' ? `강수량: ${ctx.raw}mm` : `컨디션: ${ctx.raw}` }}},
       scales:{
         x:{ grid:{color:'#2e2e40'}, ticks:{color:'#8888aa',font:{size:11}} },
         y:{ grid:{color:'#2e2e40'}, ticks:{color:'#8888aa',font:{size:11}}, min:1, max:5, position:'left' },
@@ -4246,10 +4232,9 @@ function saveFactorWindowWeight(fk, wk, val, inputEl) {
   }
 }
 
-async function renderAnalysis() {
+function renderAnalysis() {
   const fwts = DB.getObj('analysisFwts', {});
   const allConds = DB.get('conditions').sort((a,b) => a.date.localeCompare(b.date));
-  await ensureWeather(allConds.map(c => c.date));
   const conds = analysisOffOnly ? allConds.filter(c => c.workType === '오프') : allConds;
   // 필터 버튼 상태 동기화
   const btn = document.getElementById('analysisOffFilter');
@@ -4561,8 +4546,7 @@ async function renderAnalysis() {
       labels: tData.map(c => fmtDate(c.date)),
       datasets: [
         { label:'강수량', type:'bar', data: tData.map(c => WX_CACHE[c.date]?.precip ?? null),
-          backgroundColor:'rgba(96,165,250,0.25)', borderColor:'rgba(96,165,250,0.4)', borderWidth:1,
-          yAxisID:'y2', order:3 },
+          backgroundColor:'rgba(96,165,250,0.3)', borderColor:'rgba(96,165,250,0.5)', borderWidth:1, yAxisID:'y2', order:3 },
         { label:'컨디션', data: tData.map(c=>c.score||null), borderColor:'#7c6af7', backgroundColor:'rgba(124,106,247,0.08)',
           pointBackgroundColor: tData.map(c=>scoreColor(c.score)), pointRadius:4, tension:0.3, fill:true, yAxisID:'y', order:1 },
         { label:'수면÷20', data: tData.map(c=>sleepMap[c.date]?.score!=null?+(sleepMap[c.date].score/20).toFixed(2):null),
@@ -5165,7 +5149,7 @@ const GistSync = {
     try {
       const res = await fetch(`https://api.github.com/gists/${this.gistId}`, {
         method: 'PATCH',
-        headers: { 'Authorization': `Bearer ${this.token}`, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `token ${this.token}`, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' },
         body: JSON.stringify({ files: { 'health_data.json': { content: JSON.stringify(data) } } })
       });
       if (!res.ok) throw new Error(res.status);
@@ -5182,7 +5166,7 @@ const GistSync = {
     setSyncStatus('saving','불러오는 중...');
     try {
       const res = await fetch(`https://api.github.com/gists/${this.gistId}`, {
-        headers: { 'Authorization': `Bearer ${this.token}`, 'Accept': 'application/vnd.github+json' }
+        headers: { 'Authorization': `token ${this.token}`, 'Accept': 'application/vnd.github+json' }
       });
       if (!res.ok) throw new Error(res.status);
       const gist = await res.json();

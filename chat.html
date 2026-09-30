@@ -163,8 +163,11 @@ function getEveningList() {
 }
 function getWorkTypeList() {
   const wt = parsed.workTypes;
-  if (wt && wt.list && wt.list.length) return wt.list;
-  return ['데이','나이트','오피스','오프'];
+  let list;
+  if (wt && wt.list && wt.list.length) list = [...wt.list];
+  else list = ['데이','나이트','오피스','오프'];
+  if (!list.includes('오프')) list.push('오프');
+  return list;
 }
 
 // ── UI ──
@@ -411,9 +414,9 @@ async function go(val) {
       nextStep(); break;
 
     case 'EYE_PAIN':
-      if (val === '__SKIP__') { entry.eyePain = false; entry.eyeDrop = false; entry.eyePainLevel = 0; nextStep(); break; }
+      if (val === '__SKIP__') { entry.eyePain = false; entry.eyePainLevel = 0; askEyeDrop(); break; }
       entry.eyePain = (val === '있었음');
-      if (entry.eyePain) { askEyePainLevel(); } else { entry.eyeDrop = false; entry.eyePainLevel = 0; nextStep(); }
+      if (entry.eyePain) { askEyePainLevel(); } else { entry.eyePainLevel = 0; askEyeDrop(); }
       break;
 
     case 'EYE_PAIN_LEVEL':
@@ -436,7 +439,7 @@ async function go(val) {
       } break;
 
     case 'SKIN':
-      if (val === '__SKIP__') { nextStep(); break; }
+      if (val === '__SKIP__') { entry.mask = false; entry.maskType = ''; askSkinStatus(); break; }
       entry.mask     = (val !== '안 함');
       entry.maskType = entry.mask ? val : '';
       askSkinEvening(); break;
@@ -636,7 +639,7 @@ function showConfirm() {
     `💪 컨디션: ${entry.score ?? '-'}점  근무: ${wt}  M/m/술: ${mms}`,
     `🏋️ 운동: ${entry.exercises && entry.exercises.length ? entry.exercises.join(', ') : '없음'}`,
     `🌙 단식: ${entry.fasted ? 'O' : 'X'}`,
-    `👁 눈 통증: ${entry.eyePain ? `O(강도${entry.eyePainLevel}) 전날안약:${entry.eyeDrop?'O':'X'}` : 'X'}`,
+    `👁 눈 통증: ${entry.eyePain ? `O(강도${entry.eyePainLevel})` : 'X'}  전날안약:${entry.eyeDrop?'O':'X'}`,
     `💊 영양제: ${entry.supps.length ? entry.supps.join(', ') : '없음'}`,
     `🧴 팩: ${entry.mask ? entry.maskType : 'X'} / 저녁: ${ec} / 피부: ${entry.skinStatus||'-'}`,
   ].join('\n'));
@@ -669,14 +672,16 @@ async function saveEntry() {
   if (fi>=0) fasts[fi]={...fasts[fi],...fr}; else if (entry.fasted) fasts.push(fr);
   parsed.fastings = fasts;
 
-  // eyes - 통증은 entry.date에, 안약은 전날 날짜에 저장
-  if (entry.eyePain) {
+  // eyes - 통증은 entry.date에, 안약은 전날 날짜에 저장 (항상)
+  {
     const eyes = parsed.eyes || [];
-    // 오늘 날짜: 통증 기록
-    const ei = eyes.findIndex(e => e.date === d);
-    const er = { id:ei>=0?eyes[ei].id:ts+3, date:d, pain:true, drop:false, painLevel:entry.eyePainLevel||1, memo:'' };
-    if (ei>=0) eyes[ei]={...eyes[ei],...er}; else eyes.push(er);
-    // 전날 날짜: 안약 기록
+    // 오늘 날짜: 통증 기록 (통증 있을 때만)
+    if (entry.eyePain) {
+      const ei = eyes.findIndex(e => e.date === d);
+      const er = { id:ei>=0?eyes[ei].id:ts+3, date:d, pain:true, drop:false, painLevel:entry.eyePainLevel||1, memo:'' };
+      if (ei>=0) eyes[ei]={...eyes[ei],...er}; else eyes.push(er);
+    }
+    // 전날 날짜: 안약 기록 (항상)
     const pd = prevDate(d);
     const pei = eyes.findIndex(e => e.date === pd);
     if (pei >= 0) {

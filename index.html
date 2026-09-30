@@ -3598,7 +3598,7 @@ function selectCondDate(dateStr) {
         <span style="font-size:13px;color:${scoreColor}">${scoreLabel[rec.score]||''}</span>
       </div>` : ''}
       <div class="cal-detail-row" style="flex-wrap:wrap;gap:6px">
-        ${rec.workType ? `<span class="cal-detail-badge" style="background:var(--surface3);color:var(--text)">🏢 ${rec.workType}</span>` : ''}
+        <span class="cal-detail-badge" style="background:var(--surface3);color:var(--text)">🏢 ${rec.workType || '오프'}</span>
         ${(rec.exercises||[]).map(e=>`<span class="cal-detail-badge" style="background:rgba(94,216,164,0.15);color:var(--accent2)">🏋️ ${e}</span>`).join('')}
         ${rec.mBig    ? `<span class="cal-detail-badge yes">M</span>` : ''}
         ${rec.mSmall  ? `<span class="cal-detail-badge yes">m</span>` : ''}
@@ -3681,7 +3681,7 @@ function renderCondTable() {
         ${r.alcohol ? `<span style="font-size:14px;margin-left:${(r.mBig||r.mSmall)?'6px':'0'}">🍺</span>` : ''}
         ${!r.mBig && !r.mSmall && !r.alcohol ? `<span style="color:var(--text-muted);font-size:12px">-</span>` : ''}
       </td>
-      <td style="font-size:12px;color:var(--text-muted)">${r.workType || '-'}</td>
+      <td style="font-size:12px;color:var(--text-muted)">${r.workType || '오프'}</td>
       <td style="font-size:12px">${(r.exercises||[]).map(e=>`<span class="tag" style="background:rgba(94,216,164,0.15);border:1px solid rgba(94,216,164,0.3);color:var(--accent2);margin:1px">${e}</span>`).join('') || '<span style="color:var(--text-muted)">-</span>'}</td>
       <td>${(r.tags||[]).map(t => `<span class="tag" style="font-size:11px">${t}</span>`).join('')}</td>
       <td style="color:var(--text-muted);font-size:13px">${r.memo || ''}</td>
@@ -4235,7 +4235,7 @@ function saveFactorWindowWeight(fk, wk, val, inputEl) {
 function renderAnalysis() {
   const fwts = DB.getObj('analysisFwts', {});
   const allConds = DB.get('conditions').sort((a,b) => a.date.localeCompare(b.date));
-  const conds = analysisOffOnly ? allConds.filter(c => c.workType === '오프') : allConds;
+  const conds = analysisOffOnly ? allConds.filter(c => c.workType === '오프' || !c.workType) : allConds;
   // 필터 버튼 상태 동기화
   const btn = document.getElementById('analysisOffFilter');
   if (btn) {

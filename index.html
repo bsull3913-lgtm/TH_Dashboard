@@ -730,7 +730,11 @@
         <div class="ptab" id="htab-month" onclick="setHomePeriod('month')">이번달</div>
         <div id="homeMonthNext" style="display:none;width:22px;height:22px;align-items:center;justify-content:center;border-radius:50%;border:1.5px solid var(--border);background:var(--surface2);color:var(--text-muted);font-size:12px;cursor:pointer;user-select:none;transition:all 0.15s" onclick="shiftHomeMonth(1)" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">&gt;</div>
       </div>
-      <div class="ptab"        id="htab-quarter" onclick="setHomePeriod('quarter')">이번분기</div>
+      <div style="display:inline-flex;align-items:center;gap:2px">
+        <div id="home3MPrev" style="display:none;width:22px;height:22px;align-items:center;justify-content:center;border-radius:50%;border:1.5px solid var(--border);background:var(--surface2);color:var(--text-muted);font-size:12px;cursor:pointer;user-select:none;transition:all 0.15s" onclick="shiftHome3M(-1)" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">&lt;</div>
+        <div class="ptab" id="htab-quarter" onclick="setHomePeriod('quarter')">3개월</div>
+        <div id="home3MNext" style="display:none;width:22px;height:22px;align-items:center;justify-content:center;border-radius:50%;border:1.5px solid var(--border);background:var(--surface2);color:var(--text-muted);font-size:12px;cursor:pointer;user-select:none;transition:all 0.15s" onclick="shiftHome3M(1)" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">&gt;</div>
+      </div>
       <div class="ptab"        id="htab-year"    onclick="setHomePeriod('year')">1년</div>
     </div>
     <div id="homePeriodContent"></div>
@@ -1646,20 +1650,28 @@ function renderCal(containerId, titleId, year, month, getMarkClass, selectedDate
 let homeCharts = {};
 let homePeriod = 'week';
 let homeMonthOffset = 0; // 0=이번달, -1=지난달, ...
+let home3MOffset = 0;    // 0=최근3개월, -1=한달 뒤로, ...
 
 function setHomePeriod(p) {
   homePeriod = p;
   if (p !== 'month') homeMonthOffset = 0;
+  if (p !== 'quarter') home3MOffset = 0;
   ['week','month','quarter','year'].forEach(k => {
     const t = document.getElementById('htab-' + k);
     if (t) t.classList.toggle('active', k === p);
   });
-  const show = p === 'month' ? 'flex' : 'none';
+  const showM = p === 'month' ? 'flex' : 'none';
   const prev = document.getElementById('homeMonthPrev');
   const next = document.getElementById('homeMonthNext');
-  if (prev) prev.style.display = show;
-  if (next) next.style.display = show;
+  if (prev) prev.style.display = showM;
+  if (next) next.style.display = showM;
+  const show3M = p === 'quarter' ? 'flex' : 'none';
+  const prev3M = document.getElementById('home3MPrev');
+  const next3M = document.getElementById('home3MNext');
+  if (prev3M) prev3M.style.display = show3M;
+  if (next3M) next3M.style.display = show3M;
   updateHomeMonthLabel();
+  updateHome3MLabel();
   renderHomePeriodChart();
 }
 
@@ -1669,6 +1681,30 @@ function shiftHomeMonth(dir) {
   if (homeMonthOffset > 0) homeMonthOffset = 0;
   updateHomeMonthLabel();
   renderHomePeriodChart();
+}
+
+function shiftHome3M(dir) {
+  home3MOffset += dir;
+  if (home3MOffset > 0) home3MOffset = 0;
+  updateHome3MLabel();
+  renderHomePeriodChart();
+}
+
+function updateHome3MLabel() {
+  const btn  = document.getElementById('htab-quarter');
+  const next = document.getElementById('home3MNext');
+  if (!btn) return;
+  const now = new Date();
+  const endM  = new Date(now.getFullYear(), now.getMonth() + home3MOffset + 1, 0);
+  const startM = new Date(endM.getFullYear(), endM.getMonth() - 2, 1);
+  const sm = startM.getMonth()+1, em = endM.getMonth()+1;
+  if (home3MOffset === 0) {
+    btn.textContent = `3개월`;
+    if (next) next.style.opacity = '0.3';
+  } else {
+    btn.textContent = `${sm}~${em}월`;
+    if (next) next.style.opacity = '1';
+  }
 }
 
 function updateHomeMonthLabel() {
@@ -1796,11 +1832,11 @@ function renderHomePeriodChart() {
   }
 
   if (homePeriod === 'quarter') {
-    const qm = Math.floor(now.getMonth()/3)*3;
-    const qStart = new Date(now.getFullYear(), qm, 1);
-    const qEnd   = new Date(now.getFullYear(), qm + 3, 0); // 분기 마지막 날
-    const cur = new Date(qStart);
-    while (cur <= qEnd) {
+    // rolling 3개월: 끝달 = 이번달 + home3MOffset, 시작 = 끝달 - 2개월
+    const endM   = new Date(now.getFullYear(), now.getMonth() + home3MOffset + 1, 0); // 끝달 마지막 날
+    const startM = new Date(endM.getFullYear(), endM.getMonth() - 2, 1);              // 시작달 1일
+    const cur = new Date(startM);
+    while (cur <= endM) {
       const ds = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`;
       labels.push(`${cur.getMonth()+1}/${cur.getDate()}`);
       condData.push(condMap[ds]?.score || null);
@@ -1815,8 +1851,9 @@ function renderHomePeriodChart() {
       exerciseData.push((condMap[ds]?.exercises||[]).length > 0 || (parseFloat(runMap[ds]?.dist)||0) > 0);
       cur.setDate(cur.getDate() + 1);
     }
-    const qNames = ['1분기','2분기','3분기','4분기'];
-    periodTitle = `${now.getFullYear()}년 ${qNames[Math.floor(now.getMonth()/3)]}`;
+    const sm = startM.getMonth()+1, em = endM.getMonth()+1;
+    const sy = startM.getFullYear(), ey = endM.getFullYear();
+    periodTitle = sy === ey ? `${sy}년 ${sm}월~${em}월` : `${sy}.${sm}~${ey}.${em}`;
   }
 
   if (homePeriod === 'year') {
@@ -1865,10 +1902,11 @@ function renderHomePeriodChart() {
   // 이벤트 섹션
   let eventHtml = '';
 
-  if (homePeriod === 'week' || homePeriod === 'month') {
-    // 도트 그리드 (주: 26px, 월: 12px)
-    const dotSize = homePeriod === 'week' ? 26 : 12;
-    const gap = homePeriod === 'week' ? 4 : 2;
+  if (homePeriod === 'week' || homePeriod === 'month' || homePeriod === 'quarter') {
+    // 도트 그리드 (주: 26px, 월: 12px, 3개월: 7px)
+    const isQ = homePeriod === 'quarter';
+    const dotSize = homePeriod === 'week' ? 26 : (isQ ? 7 : 12);
+    const gap = homePeriod === 'week' ? 4 : (isQ ? 1 : 2);
     const events = [
       { icon: '🌙', label: '단식',   data: fastData,      color: '#7c6af7' },
       { icon: '🏋️', label: '운동',   data: exerciseData,  color: '#5ed8a4' },
@@ -1896,16 +1934,26 @@ function renderHomePeriodChart() {
 
       // 날짜 열들 (헤더 + 도트 수직 쌓기) — flex:1로 균등 배분
       const dayCols = labels.map((l, i) => {
-        const hdr = homePeriod === 'week'
-          ? `<div style="font-size:10px;line-height:1.3;text-align:center">${l}<br><span style="font-size:9px;opacity:0.65">${dateNums[i]}</span></div>`
-          : `<div style="font-size:9px;text-align:center">${l}</div>`;
+        let hdr;
+        let monthStart = false;
+        if (homePeriod === 'week') {
+          hdr = `<div style="font-size:10px;line-height:1.3;text-align:center">${l}<br><span style="font-size:9px;opacity:0.65">${dateNums[i]}</span></div>`;
+        } else if (isQ) {
+          // l = "M/D" → 1일은 "M월", 10·20일은 숫자만, 나머지는 빈칸
+          const [qm, qd] = l.split('/').map(Number);
+          monthStart = qd === 1 && i > 0;
+          const txt = qd === 1 ? `${qm}월` : (qd === 10 || qd === 20 ? String(qd) : '');
+          hdr = `<div style="font-size:9px;text-align:center;white-space:nowrap;${qd === 1 ? 'font-weight:600;color:var(--text)' : ''}">${txt}</div>`;
+        } else {
+          hdr = `<div style="font-size:9px;text-align:center">${l}</div>`;
+        }
         const dots = events.map(ev => {
           const v = ev.data[i];
           return `<div style="height:${rowH}px;display:flex;align-items:center;justify-content:center">
             <div style="width:${dotSize}px;height:${dotSize}px;border-radius:50%;background:${v ? ev.color : 'rgba(60,60,80,0.25)'};border:1.5px solid ${v ? ev.color : 'var(--border)'}"></div>
           </div>`;
         }).join('');
-        return `<div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:${colW}px">
+        return `<div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:${colW}px;${monthStart ? 'border-left:1px dashed var(--border);' : ''}">
           <div style="height:${headerH}px;width:100%;display:flex;align-items:center;justify-content:center;color:var(--text-muted)">${hdr}</div>
           ${dots}
         </div>`;
@@ -1920,7 +1968,7 @@ function renderHomePeriodChart() {
         </div>`;
     }
   } else {
-    // 분기/연간: 전체 기간 이벤트 빈도 막대
+    // 연간: 전체 기간 이벤트 빈도 막대
     // 분기는 일별 boolean 배열, 연간은 월별 숫자 배열 → 공통 합산
     const totalDays = homePeriod === 'year' ? dateSets.flat().length : labels.length;
     const cnt = arr => arr.reduce((a, b) => a + (b ? 1 : 0), 0);
